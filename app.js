@@ -3,7 +3,7 @@
 
   // 内网 PDF 下载基址：公网站点不含 PDF，所有原文下载走内网 HFS 服务（files.nslc.top）。
   // 修改此处即可切换内网域名；基址须以 / 结尾，后接 <PN>.pdf。
-  const PDF_BASE = "https://files.nslc.top/";
+  const PDF_BASE = "https://files.nslc.top/pdfs/";
 
   // PDF 链接：公网无法直接访问，标记为内网下载
   function pdfHref(r) {
