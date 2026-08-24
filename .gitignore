@@ -1,0 +1,14 @@
+# 内网 PDF 原文 — 禁止提交到公网仓库
+pdf/
+*.pdf
+
+# 预览截图
+*.png
+preview_*
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db
+node_modules/
+dist/
+*.local

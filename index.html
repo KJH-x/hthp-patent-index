@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>高温热泵专利情报库</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📑</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🌡️</span>
+      <div>
+        <h1>高温热泵专利情报库</h1>
+        <p class="sub" id="metaLine">加载中…</p>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-view="list">专利列表</button>
+      <button class="tab" data-view="stats">统计分析</button>
+      <button class="tab" data-view="about">说明</button>
+    </nav>
+  </header>
+
+  <!-- 列表视图 -->
+  <section id="view-list" class="view active">
+    <div class="toolbar">
+      <input id="searchInput" type="search" placeholder="搜索标题/摘要/申请人/专利号…">
+      <select id="dirFilter"><option value="">全部方向</option></select>
+      <select id="yearFilter"><option value="">全部年份</option></select>
+      <select id="appFilter"><option value="">全部申请人</option></select>
+      <span class="result-count" id="resultCount"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="patentTable">
+        <thead>
+          <tr>
+            <th data-key="PN" class="sortable">公开号</th>
+            <th data-key="TITLE" class="sortable">标题</th>
+            <th data-key="ANCS" class="sortable">申请人</th>
+            <th data-key="PBD" class="sortable">公开日</th>
+            <th data-key="Direction" class="sortable">方向</th>
+            <th>PDF</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div class="pager">
+        <button id="prevBtn">上一页</button>
+        <span id="pageInfo"></span>
+        <button id="nextBtn">下一页</button>
+        <label>每页 <select id="pageSize"><option>20</option><option>50</option><option selected>100</option><option>200</option></select></label>
+      </div>
+    </div>
+  </section>
+
+  <!-- 详情弹层 -->
+  <div id="detailModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="modal-close" id="modalClose">✕</button>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <!-- 统计视图 -->
+  <section id="view-stats" class="view">
+    <div class="stat-cards" id="statCards"></div>
+    <div class="charts">
+      <div class="chart-box"><h3>公开年份分布</h3><div id="chartYear" class="chart"></div></div>
+      <div class="chart-box"><h3>技术方向分布</h3><div id="chartDir" class="chart"></div></div>
+      <div class="chart-box full"><h3>主要申请人 TOP25</h3><div id="chartApp" class="chart"></div></div>
+    </div>
+  </section>
+
+  <!-- 说明视图 -->
+  <section id="view-about" class="view">
+    <div class="about">
+      <h2>关于本库</h2>
+      <p id="aboutText"></p>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
