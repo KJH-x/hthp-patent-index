@@ -1,10 +1,9 @@
 (function () {
   "use strict";
 
-  // 内网 PDF 下载基址：公网站点不含 PDF，所有原文下载走内网服务。
-  // 修改此处即可切换内网域名（例如 https://patents.intra.example/pdfs）。
-  // 用户提供内网域名/密钥后替换该值。
-  const PDF_BASE = "http://127.0.0.1:8811/pdf/";
+  // 内网 PDF 下载基址：公网站点不含 PDF，所有原文下载走内网 HFS 服务（files.nslc.top）。
+  // 修改此处即可切换内网域名；基址须以 / 结尾，后接 <PN>.pdf。
+  const PDF_BASE = "https://files.nslc.top/";
 
   // PDF 链接：公网无法直接访问，标记为内网下载
   function pdfHref(r) {
