@@ -103,12 +103,12 @@
 
     $("#tableBody").innerHTML = pageRows.map((r) => `
       <tr data-pn="${esc(r.PN)}">
-        <td><span class="pn">${esc(r.PN)}</span></td>
-        <td>${esc(r.TITLE)}</td>
-        <td>${esc((r.ANCS || []).join("、") || "—")}</td>
-        <td>${esc(r.PBD)}</td>
-        <td><span class="dir-badge">${esc(r.Direction)}</span></td>
-        <td><a class="pdf-link" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 内网下载</a></td>
+        <td class="col-pn"><span class="pn">${esc(r.PN)}</span></td>
+        <td class="col-title">${esc(r.TITLE)}</td>
+        <td class="col-ancs">${esc((r.ANCS || []).join("、") || "—")}</td>
+        <td class="col-pbd">${esc(r.PBD)}</td>
+        <td class="col-dir"><span class="dir-badge">${esc(r.Direction)}</span></td>
+        <td class="col-pdf"><a class="pdf-link" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 内网下载</a></td>
       </tr>`).join("") || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">无匹配结果</td></tr>';
 
     $("#pageInfo").textContent = `第 ${state.page} / ${pages} 页`;
@@ -148,17 +148,35 @@
   function showDetail(pn) {
     const r = PATENTS.find((x) => x.PN === pn);
     if (!r) return;
+
+    // 专利类型标签
+    const ptypeMap = { A: "发明公开", B: "发明授权", U: "实用新型", S: "外观设计" };
+    const ptype = r.PType ? (ptypeMap[r.PType] || r.PType) : "";
+
+    // 分析区块：有 AI 字段才展示
+    const aiBlock = `
+      ${r.AI_PROBLEM ? `<div class="field"><span class="label">🎯 技术问题（现有技术缺陷）</span><div class="value">${esc(r.AI_PROBLEM)}</div></div>` : ""}
+      ${r.AI_METHOD ? `<div class="field"><span class="label">💡 创新点 / 核心技术方案</span><div class="value">${esc(r.AI_METHOD)}</div></div>` : ""}
+      ${r.AI_BENEFIT ? `<div class="field"><span class="label">🏆 架构优势 / 技术功效</span><div class="value">${esc(r.AI_BENEFIT)}</div></div>` : ""}
+    `;
+    const claimsBlock = r.CLAIMS ? `
+      <div class="field"><span class="label">📋 权利要求（重点）</span><div class="value claims-text">${esc(r.CLAIMS)}</div></div>` : "";
+
     $("#detailBody").innerHTML = `
       <div class="detail">
         <h2>${esc(r.TITLE)}</h2>
-        <div class="meta">${esc(r.PN)} · 申请号 ${esc(r.APN || "—")} · 公开日 ${esc(r.PBD)} · 申请日 ${esc(r.APD || "—")}</div>
+        <div class="meta">${esc(r.PN)}${ptype ? ` · ${esc(ptype)}` : ""} · 申请号 ${esc(r.APN || "—")} · 公开日 ${esc(r.PBD)} · 申请日 ${esc(r.APD || "—")}${r.PRD ? ` · 优先权日 ${esc(r.PRD)}` : ""}</div>
         <div class="field"><span class="label">申请人</span><div class="value">${esc((r.ANCS || []).join("、") || "—")}</div></div>
         <div class="field"><span class="label">发明人</span><div class="value">${esc((r.IN || []).join("、") || "—")}</div></div>
         <div class="field"><span class="label">技术方向</span><div class="value">${esc(r.Directions || r.Direction)}</div></div>
         <div class="field"><span class="label">法律状态</span><div class="value">${esc(legalLabel(r.LEGAL || []))}</div></div>
         <div class="field"><span class="label">专利族</span><div class="value">${esc(r.FAM || "—")}</div></div>
         <div class="field"><span class="label">IPC分类号</span><div class="value">${(r.IPCR || []).map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>
+        ${(r.CPC && r.CPC.length) ? `<div class="field"><span class="label">CPC分类号</span><div class="value">${r.CPC.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>` : ""}
         <div class="field"><span class="label">摘要</span><div class="value">${esc(r.ABSTRACT || "—")}</div></div>
+        ${aiBlock ? `<hr class="detail-hr"><h3 class="detail-section">📊 专利分析</h3>` : ""}
+        ${aiBlock}
+        ${claimsBlock}
         <a class="pdf-open" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 打开官方PDF（内网）</a>
       </div>`;
     $("#detailModal").classList.remove("hidden");
