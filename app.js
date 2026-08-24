@@ -21,7 +21,8 @@
     sortKey: "PBD",
     sortDesc: true,
     page: 1,
-    pageSize: 100
+    pageSize: 100,
+    viewMode: "auto"
   };
 
   const $ = (s) => document.querySelector(s);
@@ -92,24 +93,64 @@
     return list;
   }
 
+  function effectiveView() {
+    if (state.viewMode === "auto") return window.innerWidth <= 720 ? "card" : "table";
+    return state.viewMode;
+  }
+
+  function cardHtml(r) {
+    const title = esc(r.TITLE || "—");
+    const pn = esc(r.PN);
+    const dir = esc(r.Direction || "—");
+    const pbd = esc(r.PBD || "—");
+    const ancs = esc((r.ANCS || []).join("、") || "—");
+    const abs = esc((r.ABSTRACT || "").replace(/\s+/g, " ").trim());
+    return `
+      <div class="patent-card" data-pn="${pn}" tabindex="0" role="button" aria-label="查看详情">
+        <div class="card-top">
+          <span class="pn">${pn}</span>
+          <span class="dir-badge">${dir}</span>
+          <span class="pbd">${pbd}</span>
+        </div>
+        <div class="card-title" title="${title}">${title}</div>
+        <div class="card-ancs">${ancs}</div>
+        ${abs ? `<div class="card-abs">${abs}</div>` : ""}
+        <div class="card-foot">
+          <a class="pdf-link" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 内网下载</a>
+          <span class="card-hint">点卡片打开详情 →</span>
+        </div>
+      </div>`;
+  }
+
   function render() {
     const list = filtered();
     const pages = Math.max(1, Math.ceil(list.length / state.pageSize));
     state.page = Math.min(state.page, pages);
     const start = (state.page - 1) * state.pageSize;
     const pageRows = list.slice(start, start + state.pageSize);
+    const card = effectiveView() === "card";
 
     $("#resultCount").textContent = `${list.length} / ${PATENTS.length} 条`;
 
-    $("#tableBody").innerHTML = pageRows.map((r) => `
-      <tr data-pn="${esc(r.PN)}">
-        <td class="col-pn"><span class="pn">${esc(r.PN)}</span></td>
-        <td class="col-title">${esc(r.TITLE)}</td>
-        <td class="col-ancs">${esc((r.ANCS || []).join("、") || "—")}</td>
-        <td class="col-pbd">${esc(r.PBD)}</td>
-        <td class="col-dir"><span class="dir-badge">${esc(r.Direction)}</span></td>
-        <td class="col-pdf"><a class="pdf-link" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 内网下载</a></td>
-      </tr>`).join("") || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">无匹配结果</td></tr>';
+    $("#tableWrap").classList.toggle("hidden", card);
+    $("#cardWrap").classList.toggle("hidden", !card);
+    $("#btnTable").classList.toggle("active", !card);
+    $("#btnCard").classList.toggle("active", card);
+
+    if (card) {
+      $("#cardWrap").innerHTML = pageRows.map(cardHtml).join("") ||
+        '<div class="card-empty">无匹配结果</div>';
+    } else {
+      $("#tableBody").innerHTML = pageRows.map((r) => `
+        <tr data-pn="${esc(r.PN)}">
+          <td class="col-pn"><span class="pn">${esc(r.PN)}</span></td>
+          <td class="col-title">${esc(r.TITLE)}</td>
+          <td class="col-ancs">${esc((r.ANCS || []).join("、") || "—")}</td>
+          <td class="col-pbd">${esc(r.PBD)}</td>
+          <td class="col-dir"><span class="dir-badge">${esc(r.Direction)}</span></td>
+          <td class="col-pdf"><a class="pdf-link" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 内网下载</a></td>
+        </tr>`).join("") || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">无匹配结果</td></tr>';
+    }
 
     $("#pageInfo").textContent = `第 ${state.page} / ${pages} 页`;
     $("#prevBtn").disabled = state.page <= 1;
@@ -195,6 +236,17 @@
   $("#tableBody").addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-pn]");
     if (tr && !e.target.closest("a")) showDetail(tr.dataset.pn);
+  });
+  $("#cardWrap").addEventListener("click", (e) => {
+    const card = e.target.closest(".patent-card");
+    if (card && !e.target.closest("a")) showDetail(card.dataset.pn);
+  });
+  $("#btnTable").addEventListener("click", () => { state.viewMode = "table"; render(); });
+  $("#btnCard").addEventListener("click", () => { state.viewMode = "card"; render(); });
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (state.viewMode === "auto") render(); }, 150);
   });
   $$(".tab").forEach((t) => {
     t.addEventListener("click", () => {

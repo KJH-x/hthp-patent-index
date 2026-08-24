@@ -31,21 +31,28 @@
       <select id="yearFilter"><option value="">全部年份</option></select>
       <select id="appFilter"><option value="">全部申请人</option></select>
       <span class="result-count" id="resultCount"></span>
+      <div class="view-toggle" id="viewToggle">
+        <button id="btnTable" type="button" class="vt-btn" title="表格视图"><span class="vt-ico">☰</span><span class="vt-label">表格</span></button>
+        <button id="btnCard" type="button" class="vt-btn" title="卡片视图"><span class="vt-ico">▤</span><span class="vt-label">卡片</span></button>
+      </div>
     </div>
-    <div class="table-wrap">
-      <table id="patentTable">
-        <thead>
-          <tr>
-            <th data-key="PN" class="sortable col-pn">公开号</th>
-            <th data-key="TITLE" class="sortable col-title">标题</th>
-            <th data-key="ANCS" class="sortable col-ancs">申请人</th>
-            <th data-key="PBD" class="sortable col-pbd">公开日</th>
-            <th data-key="Direction" class="sortable col-dir">方向</th>
-            <th class="col-pdf">PDF</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
+    <div class="list-area">
+      <div class="table-wrap" id="tableWrap">
+        <table id="patentTable">
+          <thead>
+            <tr>
+              <th data-key="PN" class="sortable col-pn">公开号</th>
+              <th data-key="TITLE" class="sortable col-title">标题</th>
+              <th data-key="ANCS" class="sortable col-ancs">申请人</th>
+              <th data-key="PBD" class="sortable col-pbd">公开日</th>
+              <th data-key="Direction" class="sortable col-dir">方向</th>
+              <th class="col-pdf">PDF</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div class="card-wrap hidden" id="cardWrap"></div>
       <div class="pager">
         <button id="prevBtn">上一页</button>
         <span id="pageInfo"></span>
