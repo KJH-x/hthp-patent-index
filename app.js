@@ -169,9 +169,29 @@
     return s;
   }
 
+  // 法律状态代码→中文（2026-08-26 经智慧芽核实）
+  // primary: 主状态；secondary: 伴随状态（叠加标注）
+  const LEGAL_PRIMARY = {
+    "1": "公开", "2": "实质审查", "3": "授权", "8": "授权有效",
+    "13": "驳回", "16": "未缴年费终止", "17": "放弃", "18": "撤回",
+    "19": "放弃", "222": "PCT公开"
+  };
+  const LEGAL_SECONDARY = {
+    "61": "权利转移", "63": "质押", "66": "有效", "71": "保全", "75": "一案双申"
+  };
   function legalLabel(v) {
-    const m = { "1": "审中", "2": "有效", "3": "失效", "4": "审中-公开" };
-    return v.map((x) => m[x] || x).join(", ") || "—";
+    if (!Array.isArray(v) || !v.length) return "—";
+    const main = [];
+    const extra = [];
+    v.forEach((x) => {
+      const s = String(x);
+      if (LEGAL_SECONDARY[s]) extra.push(LEGAL_SECONDARY[s]);
+      else main.push(LEGAL_PRIMARY[s] || `代码${s}`);
+    });
+    // 主状态优先取第一个；若无主状态但有伴随状态则显示伴随
+    const mainText = main.length ? main.join("/") : (extra.length ? extra[0] : "未知");
+    const extraText = extra.length ? `（${extra.join("、")}）` : "";
+    return mainText + extraText;
   }
 
   async function load() {
