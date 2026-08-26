@@ -16,25 +16,35 @@
         <p class="sub" id="metaLine">加载中…</p>
       </div>
     </div>
-    <nav class="tabs">
-      <button class="tab active" data-view="list">专利列表</button>
-      <button class="tab" data-view="stats">统计分析</button>
-      <button class="tab" data-view="about">说明</button>
-    </nav>
+    <div class="head-right">
+      <nav class="tabs">
+        <button class="tab active" data-view="list">专利列表</button>
+        <button class="tab" data-view="stats">统计分析</button>
+        <button class="tab" data-view="about">说明</button>
+      </nav>
+      <div class="switch-area">
+        <div class="view-toggle" id="viewToggle">
+          <button id="btnTable" type="button" class="vt-btn" title="表格视图（行列表）"><span class="vt-ico">☰</span><span class="vt-label">表格</span></button>
+          <button id="btnCard" type="button" class="vt-btn" title="卡片视图（网格卡片）"><span class="vt-ico">▤</span><span class="vt-label">卡片</span></button>
+        </div>
+        <button id="btnTheme" type="button" class="switch-btn" title="主题：跟随系统主题（点击切换）">
+          <span class="vt-ico" id="themeIco">🅰️</span><span class="vt-label" id="themeLbl">A</span>
+        </button>
+        <button id="btnKw" type="button" class="switch-btn" title="标题关键词下划线标注" aria-pressed="false">
+          <span class="vt-ico">＿</span><span class="vt-label">标注</span>
+        </button>
+      </div>
+    </div>
   </header>
 
   <!-- 列表视图 -->
   <section id="view-list" class="view active">
     <div class="toolbar">
-      <input id="searchInput" type="search" placeholder="搜索标题/摘要/申请人/专利号…">
+      <input id="searchInput" type="search" placeholder="搜索标题/摘要/申请人/专利号…（支持拼音，如 rebeng / gaowenrebeng）">
       <select id="dirFilter"><option value="">全部方向</option></select>
       <select id="yearFilter"><option value="">全部年份</option></select>
       <select id="appFilter"><option value="">全部申请人</option></select>
       <span class="result-count" id="resultCount"></span>
-      <div class="view-toggle" id="viewToggle">
-        <button id="btnTable" type="button" class="vt-btn" title="表格视图"><span class="vt-ico">☰</span><span class="vt-label">表格</span></button>
-        <button id="btnCard" type="button" class="vt-btn" title="卡片视图"><span class="vt-ico">▤</span><span class="vt-label">卡片</span></button>
-      </div>
     </div>
     <div class="list-area">
       <div class="table-wrap" id="tableWrap">
@@ -57,7 +67,7 @@
         <button id="prevBtn">上一页</button>
         <span id="pageInfo"></span>
         <button id="nextBtn">下一页</button>
-        <label>每页 <select id="pageSize"><option>20</option><option>50</option><option selected>100</option><option>200</option></select></label>
+        <label>每页 <select id="pageSize"><option>20</option><option>50</option><option selected>100</option><option>200</option><option value="all">全部</option></select></label>
       </div>
     </div>
   </section>
@@ -88,6 +98,7 @@
     </div>
   </section>
 
+  <script src="pinyin.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
