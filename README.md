@@ -18,8 +18,12 @@ hthp-patent/
 ├── style.css
 ├── app.js              # 检索/筛选/排序/详情/统计（含 PDF_BASE 内网下载配置）
 ├── data/
-│   ├── patents.json    # 127 件专利结构化元数据
+│   ├── patents.json    # 641 件专利结构化元数据（含 v2 回补字段 COUNTRY/ADC/PDF_IMAGE_COUNT）
 │   └── stats.json      # 统计汇总（年份/方向/申请人）
+├── scripts/
+│   ├── assert-data.mjs         # 数据不变量校验（发布门槛，零依赖 Node）
+│   ├── probe-detail-fields.mjs # H1 1b 字段探测（需登录，见其头部注释）
+│   └── RE-SCRAPE-DESIGN.md     # H1 1b 回补设计（CLAIMS/PRD/引证/优先权/过期日）
 └── README.md
 ```
 
@@ -27,7 +31,7 @@ hthp-patent/
 
 ## 数据来源与更新
 
-- 数据采集自智慧芽专利平台（2026-08），共 127 件结构化记录。
+- 数据采集自智慧芽专利平台（2026-08），共 **641** 件结构化记录。
 - 源数据与维护规范位于：
   `C:\_CustomPrograms\AnAgent\workspace\hthp-patent-investigation-20260820\`
 - 更新站点数据：
@@ -36,14 +40,16 @@ hthp-patent/
   .\data\export_site_data.ps1   # 重新生成 patents.json / stats.json
   Copy-Item site\index.html, site\style.css, site\app.js, site\data\*  .\   # 同步到本仓库
   ```
+- 数据校验（发布门槛）：
+  ```powershell
+  node scripts/assert-data.mjs   # 退出码 0=通过（641 条 / 610 族 / 回补字段覆盖率等）
+  ```
+
+> **注意（H1 1a）**：站点 `data/patents.json` 已回补 `COUNTRY`（641 非空）、`ADC`（542 非空，直传数组勿再拆分）、`PDF_IMAGE_COUNT`（610 非空，缺键兜底 `null`）。源工作区 `export_site_data.ps1` 的字段白名单若未含这三字段，**重导前必须先补映射**，否则会被丢弃。映射代码见 `scripts/RE-SCRAPE-DESIGN.md` §2。
 
 ## 内网 PDF 下载（不发布公网）
 
 - 公网站点仅含元数据；点击"内网下载"会跳转到内网 PDF 服务。
-- PDF 基址在 `app.js` 顶部 `PDF_BASE` 常量配置，当前默认 `http://127.0.0.1:8811/pdf/`。
-- 内网服务（在源工作区）：
-  ```powershell
-  python -m http.server 8811 --bind 0.0.0.0 --directory site
-  ```
-  其中 `site/pdf/` 存放全部 127 件官方 PDF（不在本仓库）。
-- 待用户提供内网域名/密钥后，将 `PDF_BASE` 替换为正式内网域名即可，无需改其他代码。
+- PDF 基址在 `app.js` 顶部 `PDF_BASE` 常量配置，当前为 `https://files.nslc.top/pdfs/`，下载 URL 形如 `{PDF_BASE}<PN>.pdf`。
+- 切换/更新内网域名只需修改 `app.js` 顶部 `PDF_BASE` 一处（基址须以 `/` 结尾）。
+- 官方 PDF 存放于内网 HFS 服务，**不提交到本仓库**（`pdf/` 目录已 gitignore）。

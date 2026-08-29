@@ -20,6 +20,7 @@
       <nav class="tabs">
         <button class="tab active" data-view="list">专利列表</button>
         <button class="tab" data-view="stats">统计分析</button>
+        <button class="tab" data-view="map">专利地图</button>
         <button class="tab" data-view="about">说明</button>
       </nav>
       <div class="switch-area">
@@ -44,7 +45,17 @@
       <select id="dirFilter"><option value="">全部方向</option></select>
       <select id="yearFilter"><option value="">全部年份</option></select>
       <select id="appFilter"><option value="">全部申请人</option></select>
+      <select id="ipcFilter"><option value="">全部IPC</option></select>
+      <select id="legalFilter"><option value="">全部法律状态</option></select>
+      <select id="countryFilter"><option value="">全部国家</option></select>
+      <label class="fam-toggle" title="同一专利族只显示主记录（授权优先）">
+        <input type="checkbox" id="famToggle"> 折叠同族
+      </label>
+      <label class="fam-toggle" title="只看已收藏的专利">
+        <input type="checkbox" id="favToggle"> 只看收藏
+      </label>
       <span class="result-count" id="resultCount"></span>
+      <button id="btnCsv" type="button" class="export-btn" title="导出当前筛选结果为 CSV（Excel 可直接打开）">⬇ 导出 CSV</button>
     </div>
     <div class="list-area">
       <div class="table-wrap" id="tableWrap">
@@ -74,8 +85,11 @@
 
   <!-- 详情弹层 -->
   <div id="detailModal" class="modal hidden">
-    <div class="modal-content">
+    <div class="modal-content" tabindex="-1">
       <button class="modal-close" id="modalClose">✕</button>
+      <button class="modal-nav" id="detailPrev" type="button" title="上一篇（←）">← 上一篇</button>
+      <button class="modal-nav" id="detailNext" type="button" title="下一篇（→）">下一篇 →</button>
+      <button class="modal-copy" id="modalCopy" type="button" title="复制本件专利的深链（含当前筛选条件）">🔗 复制链接</button>
       <div id="detailBody"></div>
     </div>
   </div>
@@ -87,6 +101,19 @@
       <div class="chart-box"><h3>公开年份分布</h3><div id="chartYear" class="chart"></div></div>
       <div class="chart-box"><h3>技术方向分布</h3><div id="chartDir" class="chart"></div></div>
       <div class="chart-box full"><h3>主要申请人 TOP25</h3><div id="chartApp" class="chart"></div></div>
+      <div class="chart-box"><h3>IPC 主组 TOP10</h3><div id="chartIpc" class="chart"></div></div>
+      <div class="chart-box"><h3>法律状态分布</h3><div id="chartLegal" class="chart"></div></div>
+      <div class="chart-box full"><h3>申请年 × 方向（近6年 × TOP8）</h3><div id="chartAppYearDir" class="chart heat"></div></div>
+    </div>
+  </section>
+
+  <!-- 专利地图视图 -->
+  <section id="view-map" class="view">
+    <div class="charts">
+      <div class="chart-box full"><h3>关键词词云（标题+摘要，KW_DICT 206 词）</h3><div id="kwCloud" class="chart cloud"></div></div>
+      <div class="chart-box full"><h3>关键词共现网络（TOP25，点击节点搜索该关键词）</h3><div id="kwNet" class="chart net"></div></div>
+      <div class="chart-box full"><h3>申请人合作网络（同一专利多申请人连边，点击节点筛选申请人）</h3><div id="appNet" class="chart net"></div></div>
+      <div class="chart-box full"><h3>地域分布（按国家，点击查看该国专利）</h3><div id="regionChart" class="chart"></div></div>
     </div>
   </section>
 
