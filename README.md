@@ -18,7 +18,9 @@ hthp-patent/
 ├── style.css
 ├── app.js              # 检索/筛选/排序/详情/统计（含 PDF_BASE 内网下载配置）
 ├── data/
-│   ├── patents.json    # 3287 件专利结构化元数据（含 v2 回补字段 COUNTRY/ADC/PDF_IMAGE_COUNT）
+│   ├── manifest.json   # 分片清单（total/shardCount/shards），站点按此渐进加载
+│   ├── patents_000.json … patents_013.json  # 分片数据（每片 ≤250 条，按 PBD 降序，首片=最新）
+│   ├── patents.json    # 全量单文件（备用/脚本校验用；站点不再直接加载）
 │   └── stats.json      # 统计汇总（年份/方向/申请人）
 ├── scripts/
 │   ├── assert-data.mjs         # 数据不变量校验（发布门槛，零依赖 Node）
@@ -26,6 +28,11 @@ hthp-patent/
 │   └── RE-SCRAPE-DESIGN.md     # H1 1b 回补设计（CLAIMS/PRD/引证/优先权/过期日）
 └── README.md
 ```
+
+> **分段加载（性能）**：站点读取 `data/manifest.json`，以并发 4 分片渐进加载 `patents_*.json`，
+> **首个分片到达即渲染列表/卡片**（优先保证列表体验），随后后台补齐其余分片并刷新统计/搜索；
+> 顶部 meta 行显示加载进度。深链 `#p=PN` 若所在分片未就绪会自动暂存、就绪后打开。
+> 重新导出数据（源工作区 `data/export_site_data.ps1`）会自动生成分片与 manifest。
 
 > `pdf/` 目录**不提交到本仓库**（内网专用，见下）。
 

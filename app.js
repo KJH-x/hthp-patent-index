@@ -357,32 +357,109 @@
     return isNew(r) ? `<span class="badge-new" title="近 30 天公开的新专利">NEW</span>` : "";
   }
 
-  async function load() {
-    const [p, s] = await Promise.all([
-      fetch("data/patents.json").then((r) => r.json()),
-      fetch("data/stats.json").then((r) => r.json())
-    ]);
-    PATENTS = p;
-    STATS = s;
-    preparePinyin();
-    buildFamilyIndex();
-    const m = /(?:^|&)p=([^&]*)/.exec((location.hash || "").replace(/^#/, ""));
-    if (m && PATENTS.some((r) => r.PN === decodeURIComponent(m[1]))) {
-      detailPn = decodeURIComponent(m[1]);
+  // ---------- 渐进式分段加载（优先渲染列表/卡片，统计/详情随后） ----------
+  let shardLoading = false;
+  let pendingDetailPn = "";
+  let renderTimer = null;
+
+  function updateMeta(loadedCount, total, done) {
+    const el = $("#metaLine");
+    const bar = $("#loadBar");
+    if (done && STATS) {
+      el.textContent = `共 ${STATS.total} 件专利 · ${STATS.byYear.length} 个年度 · 更新 ${STATS.updated}`;
+      if (bar) bar.hidden = true;
+      return;
     }
-    applyHashToState(location.hash);
-    $("#metaLine").textContent =
-      `共 ${s.total} 件专利 · ${s.byYear.length} 个年度 · 更新 ${s.updated}`;
-    populateFilters();
-    syncFilterControls();
-    switchView(state.view);
-    render();
-    if (detailPn) showDetail(detailPn);
+    const pct = total ? Math.round((loadedCount / total) * 100) : 0;
+    el.textContent = `加载中… 已就绪 ${loadedCount}/${total} 件（${pct}%）`;
+    if (bar) {
+      bar.hidden = false;
+      const fill = bar.firstElementChild;
+      if (fill) fill.style.width = (total ? Math.min(100, (loadedCount / total) * 100) : 0) + "%";
+    }
   }
 
-  // 拼音索引：加载时对“标题+申请人+方向”预计算一次全拼，缓存于内存
-  function preparePinyin() {
-    PATENTS.forEach((r) => {
+  function scheduleRender() {
+    if (renderTimer) return;
+    renderTimer = setTimeout(() => { renderTimer = null; render(); }, 120);
+  }
+
+  function afterDataGrew() {
+    buildFamilyIndex();
+    populateFilters();
+    syncFilterControls();
+    scheduleRender();
+  }
+
+  function tryOpenPendingDetail() {
+    if (!pendingDetailPn) return false;
+    if (PATENTS.some((r) => r.PN === pendingDetailPn)) {
+      const pn = pendingDetailPn;
+      pendingDetailPn = "";
+      showDetail(pn);
+      return true;
+    }
+    return false;
+  }
+
+  async function load() {
+    const statsP = fetch("data/stats.json").then((r) => r.json()).catch(() => null);
+    let manifest = null;
+    try { manifest = await fetch("data/manifest.json").then((r) => r.json()); } catch (e) { manifest = null; }
+
+    const m = /(?:^|&)p=([^&]*)/.exec((location.hash || "").replace(/^#/, ""));
+    if (m) pendingDetailPn = decodeURIComponent(m[1]);
+    applyHashToState(location.hash);
+
+    // 分片清单（无 manifest 时退回单文件，保持向后兼容）
+    const shardUrls = (manifest && Array.isArray(manifest.shards) && manifest.shards.length)
+      ? manifest.shards.map((s) => "data/" + s)
+      : ["data/patents.json"];
+    const total = (manifest && manifest.total) || 0;
+
+    STATS = await statsP;
+    if (!STATS) STATS = { total: 0, byYear: [], byDir: [], topApplicants: [], updated: "" };
+    switchView(state.view);
+    shardLoading = true;
+    updateMeta(0, total, false);
+
+    const results = new Array(shardUrls.length);
+    let nextAppend = 0;
+    function flush() {
+      let grew = false;
+      while (nextAppend < shardUrls.length && results[nextAppend] !== undefined) {
+        const arr = results[nextAppend];
+        if (Array.isArray(arr) && arr.length) { PATENTS.push(...arr); preparePinyin(arr); grew = true; }
+        nextAppend++;
+      }
+      return grew;
+    }
+
+    let idx = 0;
+    async function worker() {
+      while (idx < shardUrls.length) {
+        const my = idx++;
+        try { results[my] = await fetch(shardUrls[my]).then((r) => r.json()); }
+        catch (e) { results[my] = []; }
+        if (flush()) {
+          afterDataGrew();
+          updateMeta(PATENTS.length, total, false);
+          tryOpenPendingDetail();
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(4, shardUrls.length) }, () => worker()));
+
+    shardLoading = false;
+    afterDataGrew();
+    updateMeta(PATENTS.length, total, true);
+    if (!tryOpenPendingDetail() && detailPn) showDetail(detailPn);
+    render();
+  }
+
+  // 拼音索引：对“标题+申请人+方向”预计算全拼（支持增量：传入新分片记录）
+  function preparePinyin(list) {
+    (list || PATENTS).forEach((r) => {
       r._py = pinyin(
         `${r.TITLE} ${(r.ANCS || []).join(" ")} ${r.Direction}`
       ).toLowerCase();
@@ -1162,11 +1239,10 @@
   window.addEventListener("hashchange", () => {
     applyHashToState(location.hash);
     const m = /(?:^|&)p=([^&]*)/.exec((location.hash || "").replace(/^#/, ""));
-    if (m && PATENTS.some((r) => r.PN === decodeURIComponent(m[1]))) {
-      detailPn = decodeURIComponent(m[1]);
-    } else {
-      detailPn = "";
-    }
+    const pn = m ? decodeURIComponent(m[1]) : "";
+    const found = pn && PATENTS.some((r) => r.PN === pn);
+    pendingDetailPn = (pn && !found && shardLoading) ? pn : "";  // 分片未就绪则暂存
+    detailPn = found ? pn : "";
     syncFilterControls();
     switchView(state.view);
     render();
