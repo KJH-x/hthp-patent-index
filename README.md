@@ -18,7 +18,7 @@ hthp-patent/
 ├── style.css
 ├── app.js              # 检索/筛选/排序/详情/统计（含 PDF_BASE 内网下载配置）
 ├── data/
-│   ├── patents.json    # 3280 件专利结构化元数据（含 v2 回补字段 COUNTRY/ADC/PDF_IMAGE_COUNT）
+│   ├── patents.json    # 3287 件专利结构化元数据（含 v2 回补字段 COUNTRY/ADC/PDF_IMAGE_COUNT）
 │   └── stats.json      # 统计汇总（年份/方向/申请人）
 ├── scripts/
 │   ├── assert-data.mjs         # 数据不变量校验（发布门槛，零依赖 Node）
@@ -31,7 +31,7 @@ hthp-patent/
 
 ## 数据来源与更新
 
-- 数据采集自智慧芽专利平台（2026-08 ~ 2026-09），共 **3280** 件结构化记录。
+- 数据采集自智慧芽专利平台（2026-08 ~ 2026-09），共 **3287** 件结构化记录。
 - 源数据与维护规范位于：
   `C:\_CustomPrograms\AnAgent\workspace\hthp-patent-investigation-20260820\`
 - 更新站点数据（**只同步 data，勿覆盖本仓库前端**——仓库 app.js/index.html 领先于源工作区 site/）：
@@ -42,7 +42,7 @@ hthp-patent/
   ```
 - 数据校验（发布门槛，锚点随数据量更新）：
   ```powershell
-  node scripts/assert-data.mjs --records=3280 --isd=2257 --fam-total=3165 --fam-multi=112 --country=3280 --adc=3171 --pic=3249
+  node scripts/assert-data.mjs --records=3287 --isd=2264 --fam-total=3172 --fam-multi=112 --country=3287 --adc=3178 --pic=3256
   # 退出码 0=通过
   ```
 
