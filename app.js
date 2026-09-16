@@ -65,6 +65,7 @@
     legal: "",        // H3：法律四桶筛选（下钻目标）
     country: "",      // H11：地域筛选（下钻目标）
     tier: "",         // 质量分级筛选（1彩/2金/3紫/4白）
+    rel: "",          // 主题关联性筛选（3核心/2相关/1边缘/0无关）
     sortKey: "PBD",
     sortDesc: true,
     page: 1,
@@ -501,6 +502,12 @@
     $("#tierFilter").innerHTML =
       '<option value="">全部分级</option>' +
       [1, 2, 3, 4].map((t) => `<option value="${t}">${TIER_LABEL[t] || "白"}框（${tierCounts[t]}）</option>`).join("");
+    const REL_LABELS = [["3", "核心"], ["2", "相关"], ["1", "边缘"], ["0", "无关"], ["-1", "未判定"]];
+    const relCounts = {};
+    PATENTS.forEach((r) => { const k = String(r.REL ?? -1); relCounts[k] = (relCounts[k] || 0) + 1; });
+    $("#relFilter").innerHTML =
+      '<option value="">全部关联</option>' +
+      REL_LABELS.filter(([k]) => relCounts[k]).map(([k, lab]) => `<option value="${k}">${lab}（${relCounts[k]}）</option>`).join("");
   }
 
   function filtered() {
@@ -517,6 +524,7 @@
       if (state.legal && legalBucketOf(r.LEGAL || []) !== state.legal) return false;
       if (state.country && r.COUNTRY !== state.country) return false;
       if (state.tier && String(r.Q || 4) !== String(state.tier)) return false;
+      if (state.rel !== "" && String(r.REL ?? -1) !== state.rel) return false;
       if (state.favOnly && !isFav(r.PN)) return false;
       if (words.length || parsed.fields.length) {
         const hay = `${r.PN} ${r.TITLE} ${r.ABSTRACT} ${(r.ANCS || []).join(" ")} ${(r.IN || []).join(" ")} ${(r.IPCR || []).join(" ")} ${(r.CPC || []).join(" ")} ${r.Direction} ${r.Directions} ${r.FAM} ${r.AI_PROBLEM} ${r.AI_METHOD} ${r.AI_BENEFIT} ${r.COUNTRY || ""} ${(r.ADC || []).join(" ")}`.toLowerCase();
@@ -553,6 +561,16 @@
     return `<span class="tier-badge tier-${t}" title="质量分级：${TIER_TITLE[t]}${s}">${TIER_LABEL[t]}</span>`;
   }
 
+  // 主题关联性徽标（LLM 判定）：3核心/2相关/1边缘/0无关
+  const REL_META = { 3: ["核", "核心相关"], 2: ["相", "相关"], 1: ["缘", "边缘相关"], 0: ["无", "无关/灌水"] };
+  function relBadgeHtml(r) {
+    const v = r.REL;
+    if (v === undefined || v === null || v < 0) return "";
+    const m = REL_META[v];
+    if (!m) return "";
+    return `<span class="rel-badge rel-${v}" title="主题关联性：${m[1]}${r.RW ? " · " + esc(r.RW) : ""}">${m[0]}</span>`;
+  }
+
   function cardHtml(r, terms) {
     const pn = esc(r.PN);
     const g = FAMILY_INDEX.get(r.FAM);
@@ -567,7 +585,7 @@
     return `
       <div class="patent-card tier-${r.Q || 4}" data-pn="${pn}" tabindex="0" role="button" aria-label="查看详情">
         <div class="card-top">
-          <span class="pn">${pn}</span>${tierBadgeHtml(r)}${newBadgeHtml(r)}${favBtnHtml(r)}
+          <span class="pn">${pn}</span>${tierBadgeHtml(r)}${relBadgeHtml(r)}${newBadgeHtml(r)}${favBtnHtml(r)}
           <span class="dir-badge">${dir}</span>${famBadge}
           <span class="pbd">${pbd}</span>
         </div>
@@ -613,7 +631,7 @@
           : "";
         return `
         <tr class="tier-${r.Q || 4}" data-pn="${esc(r.PN)}">
-          <td class="col-pn"><span class="pn">${esc(r.PN)}</span>${tierBadgeHtml(r)}${newBadgeHtml(r)}${favBtnHtml(r)}${famBadge}</td>
+          <td class="col-pn"><span class="pn">${esc(r.PN)}</span>${tierBadgeHtml(r)}${relBadgeHtml(r)}${newBadgeHtml(r)}${favBtnHtml(r)}${famBadge}</td>
           <td class="col-title">${buildTitleHtml(r, terms)}</td>
           <td class="col-ancs">${hlPlain((r.ANCS || []).join("、") || "—", terms)}</td>
           <td class="col-pbd">${esc(r.PBD)}</td>
@@ -881,6 +899,7 @@
     setSel("#legalFilter", state.legal);
     setSel("#countryFilter", state.country);
     setSel("#tierFilter", state.tier);
+    setSel("#relFilter", state.rel);
   }
 
   // hash 字段：q/y/d/a/i/l/c/s/o/ps/pg/v/p
@@ -895,6 +914,7 @@
     push("l", state.legal);
     push("c", state.country);
     push("t", state.tier);
+    push("rr", state.rel);
     if (state.sortKey !== "PBD" || !state.sortDesc) {
       p.push(`s=${state.sortKey}`);
       if (!state.sortDesc) p.push("o=asc");
@@ -914,6 +934,8 @@
     state.ipc = qs.get("i") || "";
     state.legal = qs.get("l") || "";
     state.country = qs.get("c") || "";
+    state.tier = qs.get("t") || "";
+    state.rel = qs.get("rr") || "";
     state.tier = qs.get("t") || "";
     const s = qs.get("s");
     state.sortKey = s && ["PN", "TITLE", "ANCS", "PBD", "Direction"].includes(s) ? s : "PBD";
@@ -1007,6 +1029,9 @@
         <div class="field"><span class="label">发明人</span><div class="value">${esc((r.IN || []).join("、") || "—")}</div></div>
         <div class="field"><span class="label">技术方向</span><div class="value">${esc(r.Directions || r.Direction)}</div></div>
         <div class="field"><span class="label">质量分级</span><div class="value">${tierBadgeHtml(r) || `<span class="tier-badge tier-4">白</span>`} ${esc(TIER_TITLE[r.Q || 4])}${typeof r.QS === "number" ? ` · 评分 ${r.QS}` : ""}${r.QR ? `<div class="tier-why">依据：${esc(r.QR)}</div>` : ""}</div></div>
+        <div class="field"><span class="label">主题关联性</span><div class="value">${relBadgeHtml(r) || `<span class="rel-badge rel-na">未判定</span>`}${r.RW ? ` ${esc(r.RW)}` : ""}</div></div>
+        ${(r.SIM && r.SIM.length) ? `<div class="field"><span class="label">相似专利</span><div class="value">${r.SIM.map((p) => `<button type="button" class="tag sim-pn" data-pn="${esc(p)}">${esc(p)}</button>`).join(" ")}</div></div>` : ""}
+        ${(r.DER && r.DER.length > 1) ? `<div class="field"><span class="label">派生群</span><div class="value"><span class="der-note">同申请人跨族高相似系列（疑似衍生/重复布局，共 ${r.DER.length} 件）：</span>${r.DER.map((p) => p === r.PN ? `<b>${esc(p)}</b>` : `<button type="button" class="tag sim-pn" data-pn="${esc(p)}">${esc(p)}</button>`).join(" ")}</div></div>` : ""}
         <div class="field"><span class="label">法律状态</span><div class="value">${esc(legalLabel(r.LEGAL || []))}</div></div>
         <div class="field"><span class="label">专利族</span><div class="value">${familyFieldHtml(r)}</div></div>
         ${adcBlock}
@@ -1135,6 +1160,7 @@
   $("#legalFilter").addEventListener("change", (e) => { state.legal = e.target.value; state.page = 1; render(); });
   $("#countryFilter").addEventListener("change", (e) => { state.country = e.target.value; state.page = 1; render(); });
   $("#tierFilter").addEventListener("change", (e) => { state.tier = e.target.value; state.page = 1; render(); });
+  $("#relFilter").addEventListener("change", (e) => { state.rel = e.target.value; state.page = 1; render(); });
   $("#pageSize").addEventListener("change", (e) => {
     state.pageSize = e.target.value === "all" ? "all" : +e.target.value;
     state.page = 1;
@@ -1157,6 +1183,8 @@
     if (e.target === $("#detailModal")) { closeDetail(); return; }
     const fm = e.target.closest(".fam-member");
     if (fm) { e.stopPropagation(); showDetail(fm.dataset.pn); return; }
+    const sp = e.target.closest(".sim-pn");
+    if (sp) { e.stopPropagation(); showDetail(sp.dataset.pn); return; }
     const tag = e.target.closest(".ipc-tag, .sim-btn");
     if (tag) { e.stopPropagation(); const f = tag.dataset.facet, l = tag.dataset.label; closeDetail(); drill(f, l); return; }
     if (e.target.closest("#detailPrev")) { e.stopPropagation(); goPrev(); return; }

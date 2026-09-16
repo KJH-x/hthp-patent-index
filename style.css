@@ -434,3 +434,12 @@ u.kw-uline {
 .tier-badge.tier-3 { color: #6d28d9; border-color: #c4b5fd; background: color-mix(in srgb, #a78bfa 18%, transparent); }
 .tier-badge.tier-4 { color: var(--muted); border-color: color-mix(in srgb, var(--muted) 30%, transparent); }
 .tier-why { margin-top: 4px; font-size: 12px; color: var(--muted); }
+/* 主题关联性徽标（LLM 判定） */
+.rel-badge { display:inline-block; margin-left:6px; padding:0 5px; border-radius:6px; font-size:11px; line-height:15px; border:1px solid transparent; white-space:nowrap; }
+.rel-badge.rel-3 { color:#15803d; border-color:#86efac; background:color-mix(in srgb,#4ade80 16%,transparent); }
+.rel-badge.rel-2 { color:#1d4ed8; border-color:#93c5fd; background:color-mix(in srgb,#60a5fa 14%,transparent); }
+.rel-badge.rel-1 { color:#92400e; border-color:#fcd34d; background:color-mix(in srgb,#fbbf24 14%,transparent); }
+.rel-badge.rel-0 { color:#b91c1c; border-color:#fca5a5; background:color-mix(in srgb,#f87171 14%,transparent); text-decoration:line-through; }
+.rel-badge.rel-na { color:var(--muted); border-color:color-mix(in srgb,var(--muted) 30%,transparent); }
+.sim-pn { font-family:Consolas,monospace; }
+.der-note { color:var(--muted); font-size:12px; display:block; margin-bottom:4px; }
