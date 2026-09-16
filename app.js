@@ -64,6 +64,7 @@
     ipc: "",          // H3/H6：IPC 主组筛选（下钻目标）
     legal: "",        // H3：法律四桶筛选（下钻目标）
     country: "",      // H11：地域筛选（下钻目标）
+    tier: "",         // 质量分级筛选（1彩/2金/3紫/4白）
     sortKey: "PBD",
     sortDesc: true,
     page: 1,
@@ -495,6 +496,11 @@
     $("#countryFilter").innerHTML =
       '<option value="">全部国家</option>' +
       [...countries].sort().map((c) => `<option>${esc(c)}</option>`).join("");
+    const tierCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    PATENTS.forEach((r) => { tierCounts[r.Q || 4]++; });
+    $("#tierFilter").innerHTML =
+      '<option value="">全部分级</option>' +
+      [1, 2, 3, 4].map((t) => `<option value="${t}">${TIER_LABEL[t] || "白"}框（${tierCounts[t]}）</option>`).join("");
   }
 
   function filtered() {
@@ -510,6 +516,7 @@
         !(r.CPC || []).some((x) => ipcMainGroup(x) === state.ipc)) return false;
       if (state.legal && legalBucketOf(r.LEGAL || []) !== state.legal) return false;
       if (state.country && r.COUNTRY !== state.country) return false;
+      if (state.tier && String(r.Q || 4) !== String(state.tier)) return false;
       if (state.favOnly && !isFav(r.PN)) return false;
       if (words.length || parsed.fields.length) {
         const hay = `${r.PN} ${r.TITLE} ${r.ABSTRACT} ${(r.ANCS || []).join(" ")} ${(r.IN || []).join(" ")} ${(r.IPCR || []).join(" ")} ${(r.CPC || []).join(" ")} ${r.Direction} ${r.Directions} ${r.FAM} ${r.AI_PROBLEM} ${r.AI_METHOD} ${r.AI_BENEFIT} ${r.COUNTRY || ""} ${(r.ADC || []).join(" ")}`.toLowerCase();
@@ -536,6 +543,16 @@
     return state.viewMode;
   }
 
+  // 质量分级：1彩(约1%)/2金(10%)/3紫(30%)/4白(其余)
+  const TIER_LABEL = { 1: "彩", 2: "金", 3: "紫", 4: "" };
+  const TIER_TITLE = { 1: "顶级（约1%）", 2: "优质（约10%）", 3: "较好（约30%）", 4: "常规" };
+  function tierBadgeHtml(r) {
+    const t = r.Q || 4;
+    if (t >= 4) return "";
+    const s = (typeof r.QS === "number") ? ` · ${r.QS}` : "";
+    return `<span class="tier-badge tier-${t}" title="质量分级：${TIER_TITLE[t]}${s}">${TIER_LABEL[t]}</span>`;
+  }
+
   function cardHtml(r, terms) {
     const pn = esc(r.PN);
     const g = FAMILY_INDEX.get(r.FAM);
@@ -548,9 +565,9 @@
     const abs = hlPlain((r.ABSTRACT || "").replace(/\s+/g, " ").trim(), terms);
     const title = buildTitleHtml(r, terms);
     return `
-      <div class="patent-card" data-pn="${pn}" tabindex="0" role="button" aria-label="查看详情">
+      <div class="patent-card tier-${r.Q || 4}" data-pn="${pn}" tabindex="0" role="button" aria-label="查看详情">
         <div class="card-top">
-          <span class="pn">${pn}</span>${newBadgeHtml(r)}${favBtnHtml(r)}
+          <span class="pn">${pn}</span>${tierBadgeHtml(r)}${newBadgeHtml(r)}${favBtnHtml(r)}
           <span class="dir-badge">${dir}</span>${famBadge}
           <span class="pbd">${pbd}</span>
         </div>
@@ -595,8 +612,8 @@
           ? `<span class="fam-badge" title="同族 ${g.size} 件，点击详情查看族成员">${g.size} 件族</span>`
           : "";
         return `
-        <tr data-pn="${esc(r.PN)}">
-          <td class="col-pn"><span class="pn">${esc(r.PN)}</span>${newBadgeHtml(r)}${favBtnHtml(r)}${famBadge}</td>
+        <tr class="tier-${r.Q || 4}" data-pn="${esc(r.PN)}">
+          <td class="col-pn"><span class="pn">${esc(r.PN)}</span>${tierBadgeHtml(r)}${newBadgeHtml(r)}${favBtnHtml(r)}${famBadge}</td>
           <td class="col-title">${buildTitleHtml(r, terms)}</td>
           <td class="col-ancs">${hlPlain((r.ANCS || []).join("、") || "—", terms)}</td>
           <td class="col-pbd">${esc(r.PBD)}</td>
@@ -863,6 +880,7 @@
     setSel("#ipcFilter", state.ipc);
     setSel("#legalFilter", state.legal);
     setSel("#countryFilter", state.country);
+    setSel("#tierFilter", state.tier);
   }
 
   // hash 字段：q/y/d/a/i/l/c/s/o/ps/pg/v/p
@@ -876,6 +894,7 @@
     push("i", state.ipc);
     push("l", state.legal);
     push("c", state.country);
+    push("t", state.tier);
     if (state.sortKey !== "PBD" || !state.sortDesc) {
       p.push(`s=${state.sortKey}`);
       if (!state.sortDesc) p.push("o=asc");
@@ -895,6 +914,7 @@
     state.ipc = qs.get("i") || "";
     state.legal = qs.get("l") || "";
     state.country = qs.get("c") || "";
+    state.tier = qs.get("t") || "";
     const s = qs.get("s");
     state.sortKey = s && ["PN", "TITLE", "ANCS", "PBD", "Direction"].includes(s) ? s : "PBD";
     state.sortDesc = qs.get("o") !== "asc";
@@ -986,6 +1006,7 @@
         <div class="field"><span class="label">申请人</span><div class="value">${hlPlain((r.ANCS || []).join("、") || "—", terms)}</div></div>
         <div class="field"><span class="label">发明人</span><div class="value">${esc((r.IN || []).join("、") || "—")}</div></div>
         <div class="field"><span class="label">技术方向</span><div class="value">${esc(r.Directions || r.Direction)}</div></div>
+        <div class="field"><span class="label">质量分级</span><div class="value">${tierBadgeHtml(r) || `<span class="tier-badge tier-4">白</span>`} ${esc(TIER_TITLE[r.Q || 4])}${typeof r.QS === "number" ? ` · 评分 ${r.QS}` : ""}${r.QR ? `<div class="tier-why">依据：${esc(r.QR)}</div>` : ""}</div></div>
         <div class="field"><span class="label">法律状态</span><div class="value">${esc(legalLabel(r.LEGAL || []))}</div></div>
         <div class="field"><span class="label">专利族</span><div class="value">${familyFieldHtml(r)}</div></div>
         ${adcBlock}
@@ -1113,6 +1134,7 @@
   $("#ipcFilter").addEventListener("change", (e) => { state.ipc = e.target.value; state.page = 1; render(); });
   $("#legalFilter").addEventListener("change", (e) => { state.legal = e.target.value; state.page = 1; render(); });
   $("#countryFilter").addEventListener("change", (e) => { state.country = e.target.value; state.page = 1; render(); });
+  $("#tierFilter").addEventListener("change", (e) => { state.tier = e.target.value; state.page = 1; render(); });
   $("#pageSize").addEventListener("change", (e) => {
     state.pageSize = e.target.value === "all" ? "all" : +e.target.value;
     state.page = 1;

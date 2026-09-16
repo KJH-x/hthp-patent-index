@@ -399,3 +399,38 @@ u.kw-uline {
 .loadbar { width: 180px; height: 4px; margin-top: 5px; border-radius: 3px; background: color-mix(in srgb, var(--fg, #333) 15%, transparent); overflow: hidden; }
 .loadbar[hidden] { display: none; }
 .loadbar > i { display: block; height: 100%; width: 0; background: var(--accent, #3b82f6); transition: width .25s ease; }
+/* ===== 质量分级：细条色框（彩≈1% / 金≈10% / 紫≈30% / 白=其余）===== */
+.patent-card { position: relative; }
+.patent-card::before,
+#patentTable tbody td:first-child::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  border-radius: 2px; background: transparent; pointer-events: none;
+}
+#patentTable tbody td:first-child { position: relative; }
+/* 彩框：渐变彩条（顶级，约 1%） */
+.patent-card.tier-1::before,
+#patentTable tbody tr.tier-1 > td:first-child::before {
+  background: linear-gradient(180deg, #f87171, #fbbf24, #34d399, #60a5fa, #a78bfa);
+}
+/* 金框（优质，约 10%） */
+.patent-card.tier-2::before,
+#patentTable tbody tr.tier-2 > td:first-child::before { background: #d9a441; }
+/* 紫框（较好，约 30%） */
+.patent-card.tier-3::before,
+#patentTable tbody tr.tier-3 > td:first-child::before { background: #a78bfa; }
+/* 白框（其余）：极淡中性条，与背景可区分但不抢眼 */
+.patent-card.tier-4::before,
+#patentTable tbody tr.tier-4 > td:first-child::before {
+  background: color-mix(in srgb, var(--muted, #94a3b8) 38%, transparent);
+}
+
+/* 分级小徽标 */
+.tier-badge {
+  display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 6px;
+  font-size: 11px; line-height: 15px; vertical-align: 1px; border: 1px solid transparent; white-space: nowrap;
+}
+.tier-badge.tier-1 { color: #5b21b6; border-color: #c4b5fd; background: linear-gradient(90deg, #fde68a, #fbcfe8, #c7d2fe); }
+.tier-badge.tier-2 { color: #8a5a00; border-color: #d9a441; background: color-mix(in srgb, #d9a441 20%, transparent); }
+.tier-badge.tier-3 { color: #6d28d9; border-color: #c4b5fd; background: color-mix(in srgb, #a78bfa 18%, transparent); }
+.tier-badge.tier-4 { color: var(--muted); border-color: color-mix(in srgb, var(--muted) 30%, transparent); }
+.tier-why { margin-top: 4px; font-size: 12px; color: var(--muted); }
