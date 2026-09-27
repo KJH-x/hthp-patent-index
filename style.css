@@ -22,6 +22,9 @@
   --hl-bg: #fde68a;
   --hl-ink: #92400e;
   --kw-line: #dc2626;
+  --tier2-ink: #5c3d00;
+  --tier3-ink: #6d28d9;
+  --tier-band-4: rgba(148, 163, 184, .45);
   --scrollbar: rgba(100, 116, 139, .4);
   --scrollbar-hover: rgba(100, 116, 139, .7);
   --radius: 10px;
@@ -48,6 +51,9 @@
   --hl-bg: #78350f;
   --hl-ink: #fde68a;
   --kw-line: #fca5a5;
+  --tier2-ink: #f3d18a;
+  --tier3-ink: #c4b5fd;
+  --tier-band-4: rgba(148, 163, 184, .5);
   --scrollbar: rgba(148, 163, 184, .4);
   --scrollbar-hover: rgba(148, 163, 184, .7);
   --shadow: 0 1px 3px rgba(0,0,0,.45);
@@ -73,6 +79,9 @@
     --hl-bg: #78350f;
     --hl-ink: #fde68a;
     --kw-line: #fca5a5;
+    --tier2-ink: #f3d18a;
+    --tier3-ink: #c4b5fd;
+    --tier-band-4: rgba(148, 163, 184, .5);
     --scrollbar: rgba(148, 163, 184, .4);
     --scrollbar-hover: rgba(148, 163, 184, .7);
     --shadow: 0 1px 3px rgba(0,0,0,.45);
@@ -399,40 +408,73 @@ u.kw-uline {
 .loadbar { width: 180px; height: 4px; margin-top: 5px; border-radius: 3px; background: color-mix(in srgb, var(--fg, #333) 15%, transparent); overflow: hidden; }
 .loadbar[hidden] { display: none; }
 .loadbar > i { display: block; height: 100%; width: 0; background: var(--accent, #3b82f6); transition: width .25s ease; }
-/* ===== 质量分级：细条色框（彩≈1% / 金≈10% / 紫≈30% / 白=其余）===== */
+/* ===== 质量分级：左缘细色带（彩≈1% / 金≈10% / 紫≈30% / 白=其余）=====
+   设计要点：1) 色带贴合卡片圆角（overflow:hidden 裁切）；
+   2) 彩档用「宝石光泽」渐变（紫→品红→暖金），避开绿/蓝，避免与关联性徽标（绿/蓝/琥珀/红）撞色；
+   3) 金/紫用金属与宝石渐变而非纯色，提升质感；白档仅 2px 极淡中性带，可辨但不抢眼。 */
 .patent-card { position: relative; }
-.patent-card::before,
-#patentTable tbody td:first-child::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  border-radius: 2px; background: transparent; pointer-events: none;
+/* 色带用「背景图」绘制：背景会被 border-radius 自动裁切，贴合圆角，
+   且不像 overflow:hidden 那样把网格项的自动最小尺寸降为 0（会导致卡片被压扁）。 */
+.patent-card[class*="tier-"] { background-repeat: no-repeat; background-position: 0 0; }
+/* 彩框（顶级） */
+.patent-card.tier-1 {
+  background-image: linear-gradient(180deg, #7c3aed, #d946ef 32%, #f472b6 52%, #fb7185 68%, #f59e0b 88%, #fbbf24);
+  background-size: 4px 100%;
 }
-#patentTable tbody td:first-child { position: relative; }
-/* 彩框：渐变彩条（顶级，约 1%） */
-.patent-card.tier-1::before,
-#patentTable tbody tr.tier-1 > td:first-child::before {
-  background: linear-gradient(180deg, #f87171, #fbbf24, #34d399, #60a5fa, #a78bfa);
+/* 金框（优质）：金属渐变 */
+.patent-card.tier-2 {
+  background-image: linear-gradient(180deg, #f6d98a, #d9a441 46%, #b8860b);
+  background-size: 3px 100%;
 }
-/* 金框（优质，约 10%） */
-.patent-card.tier-2::before,
-#patentTable tbody tr.tier-2 > td:first-child::before { background: #d9a441; }
-/* 紫框（较好，约 30%） */
-.patent-card.tier-3::before,
-#patentTable tbody tr.tier-3 > td:first-child::before { background: #a78bfa; }
-/* 白框（其余）：极淡中性条，与背景可区分但不抢眼 */
-.patent-card.tier-4::before,
-#patentTable tbody tr.tier-4 > td:first-child::before {
-  background: color-mix(in srgb, var(--muted, #94a3b8) 38%, transparent);
+/* 紫框（较好）：宝石渐变 */
+.patent-card.tier-3 {
+  background-image: linear-gradient(180deg, #c4b5fd, #8b5cf6 58%, #7c3aed);
+  background-size: 3px 100%;
+}
+/* 白框（其余） */
+.patent-card.tier-4 {
+  background-image: linear-gradient(180deg, var(--tier-band-4), var(--tier-band-4));
+  background-size: 2px 100%;
+}
+
+/* 表格：首格左缘内嵌色带（随行高自适应，避免绝对定位悬浮感） */
+#patentTable tbody td:first-child { background-repeat: no-repeat; background-position: 0 0; }
+#patentTable tbody tr.tier-1 > td:first-child {
+  background-image: linear-gradient(180deg, #7c3aed, #d946ef 32%, #f472b6 52%, #fb7185 68%, #f59e0b 88%, #fbbf24);
+  background-size: 4px 100%;
+}
+#patentTable tbody tr.tier-2 > td:first-child {
+  background-image: linear-gradient(180deg, #f6d98a, #d9a441 46%, #b8860b);
+  background-size: 3px 100%;
+}
+#patentTable tbody tr.tier-3 > td:first-child {
+  background-image: linear-gradient(180deg, #c4b5fd, #8b5cf6 58%, #7c3aed);
+  background-size: 3px 100%;
+}
+#patentTable tbody tr.tier-4 > td:first-child {
+  background-image: linear-gradient(180deg, var(--tier-band-4), var(--tier-band-4));
+  background-size: 2px 100%;
 }
 
 /* 分级小徽标 */
 .tier-badge {
-  display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 6px;
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px;
   font-size: 11px; line-height: 15px; vertical-align: 1px; border: 1px solid transparent; white-space: nowrap;
 }
-.tier-badge.tier-1 { color: #5b21b6; border-color: #c4b5fd; background: linear-gradient(90deg, #fde68a, #fbcfe8, #c7d2fe); }
-.tier-badge.tier-2 { color: #8a5a00; border-color: #d9a441; background: color-mix(in srgb, #d9a441 20%, transparent); }
-.tier-badge.tier-3 { color: #6d28d9; border-color: #c4b5fd; background: color-mix(in srgb, #a78bfa 18%, transparent); }
-.tier-badge.tier-4 { color: var(--muted); border-color: color-mix(in srgb, var(--muted) 30%, transparent); }
+.tier-badge.tier-1 {
+  color: #fff; font-weight: 700; border-color: rgba(255,255,255,.35);
+  background: linear-gradient(90deg, #7c3aed, #c026d3 52%, #d97706);
+  box-shadow: 0 1px 2px rgba(124,58,237,.35);
+}
+.tier-badge.tier-2 {
+  color: var(--tier2-ink); font-weight: 600; border-color: #d9a441;
+  background: linear-gradient(180deg, #f9e3ae, #e8b64e);
+}
+.tier-badge.tier-3 {
+  color: var(--tier3-ink); font-weight: 600; border-color: #c4b5fd;
+  background: color-mix(in srgb, #8b5cf6 16%, transparent);
+}
+.tier-badge.tier-4 { color: var(--muted); border-color: color-mix(in srgb, var(--muted) 26%, transparent); }
 .tier-why { margin-top: 4px; font-size: 12px; color: var(--muted); }
 /* 主题关联性徽标（LLM 判定） */
 .rel-badge { display:inline-block; margin-left:6px; padding:0 5px; border-radius:6px; font-size:11px; line-height:15px; border:1px solid transparent; white-space:nowrap; }
