@@ -57,6 +57,7 @@
       <label class="fam-toggle" title="只看已收藏的专利">
         <input type="checkbox" id="favToggle"> 只看收藏
       </label>
+      <span id="coChip" class="co-chip hidden" title="点击清除联合申请组合筛选"></span>
       <span class="result-count" id="resultCount"></span>
       <button id="btnCsv" type="button" class="export-btn" title="导出当前筛选结果为 CSV（Excel 可直接打开）">⬇ 导出 CSV</button>
     </div>
@@ -117,6 +118,30 @@
       <div class="chart-box full"><h3>关键词共现网络（TOP25，点击节点搜索该关键词）</h3><div id="kwNet" class="chart net"></div></div>
       <div class="chart-box full"><h3>申请人合作网络（同一专利多申请人连边，点击节点筛选申请人）</h3><div id="appNet" class="chart net"></div></div>
       <div class="chart-box full"><h3>地域分布（按国家，点击查看该国专利）</h3><div id="regionChart" class="chart"></div></div>
+
+      <div class="chart-box full">
+        <h3>申请人布局矩阵（TOP10 技术方向 × TOP15 申请人，色深=件数；点击格子按「申请人+方向」下钻）</h3>
+        <div id="appDirHeat" class="chart heat"></div>
+      </div>
+
+      <div class="chart-box full">
+        <h3>申请人专利布局总览 <span class="muted">（点击行查看布局详情；点击表头排序）</span></h3>
+        <div class="app-tools">
+          <input id="appSearch" type="search" placeholder="筛选申请人…">
+          <span class="muted" id="appPortfolioHint"></span>
+        </div>
+        <div id="appPortfolio" class="scrollbox"></div>
+      </div>
+
+      <div class="chart-box full">
+        <h3>申请人布局详情：<span id="appProfileName" class="muted">—</span></h3>
+        <div id="appProfile" class="chart"></div>
+      </div>
+
+      <div class="chart-box full">
+        <h3>联合申请组合排行（同一专利多申请人；点击下钻该组合共同申请的专利）</h3>
+        <div id="jointApps" class="chart"></div>
+      </div>
     </div>
   </section>
 

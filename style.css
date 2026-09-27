@@ -485,3 +485,64 @@ u.kw-uline {
 .rel-badge.rel-na { color:var(--muted); border-color:color-mix(in srgb,var(--muted) 30%,transparent); }
 .sim-pn { font-family:Consolas,monospace; }
 .der-note { color:var(--muted); font-size:12px; display:block; margin-bottom:4px; }
+/* ========== H12 申请人专利布局（专利地图） ========== */
+.muted { color: var(--muted); font-weight: 400; font-size: 13px; }
+.app-tools { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.app-tools input[type="search"] {
+  flex: 0 1 280px; padding: 7px 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--card); color: var(--ink); font-size: 13px;
+}
+.scrollbox { max-height: 460px; overflow: auto; }
+.app-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.app-table th, .app-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.app-table th { background: var(--th-bg); color: var(--th-ink); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+.app-table th.sortable { cursor: pointer; user-select: none; }
+.app-table th.sortable:hover { background: var(--accent-soft); color: var(--accent); }
+.app-table tbody tr { cursor: pointer; }
+.app-table tbody tr:hover { background: var(--accent-soft); }
+.app-table tbody tr.active { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.app-table .app-name { max-width: 320px; }
+.app-table .num-col { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; position: relative; }
+.app-table .num-col .pct { color: var(--muted); font-size: 11px; margin-left: 4px; }
+.app-table .mini-bar {
+  position: absolute; left: 6px; top: 50%; height: 6px; transform: translateY(-50%);
+  background: color-mix(in srgb, var(--accent) 26%, transparent); border-radius: 3px; z-index: 0;
+}
+.app-table .empty-cell { text-align: center; color: var(--muted); padding: 20px; }
+.app-tag {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px;
+  font-size: 11px; background: var(--tag-bg); color: var(--tag-ink); white-space: nowrap;
+}
+.profile-sum { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.profile-secs { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px; }
+.profile-sec { min-width: 0; }
+.profile-sec.full { grid-column: 1 / -1; }
+.profile-sec h4 { font-size: 13px; color: var(--label); margin-bottom: 8px; }
+.profile-sec .chart .bar-label { width: 120px; }
+.tier-chips { display: flex; gap: 10px; flex-wrap: wrap; }
+.tier-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 8px;
+  font-size: 12px; border: 1px solid transparent; background: var(--tag-bg); color: var(--tag-ink);
+}
+.tier-chip b { font-size: 13px; }
+.tier-chip.tier-1 { color: #fff; background: linear-gradient(90deg, #7c3aed, #c026d3 52%, #d97706); }
+.tier-chip.tier-2 { color: var(--tier2-ink); border-color: #d9a441; background: linear-gradient(180deg, #f9e3ae, #e8b64e); }
+.tier-chip.tier-3 { color: var(--tier3-ink); border-color: #c4b5fd; background: color-mix(in srgb, #8b5cf6 16%, transparent); }
+.tier-chip.tier-4 { color: var(--muted); border-color: color-mix(in srgb, var(--muted) 26%, transparent); }
+.mini-list { list-style: none; margin: 0; padding: 0; }
+.mini-list li {
+  padding: 5px 2px; border-bottom: 1px dashed var(--border); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+}
+.mini-list li:hover { color: var(--accent); }
+.mini-list .pn { font-family: Consolas, monospace; font-weight: 600; color: var(--accent); }
+.mini-list .mini-year { color: var(--muted); font-size: 12px; }
+.co-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 16px; cursor: pointer;
+  background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); font-size: 13px; white-space: nowrap;
+}
+.co-chip:hover { background: var(--accent); color: #fff; }
+#appDirHeat .app-hcell { cursor: pointer; }
+#appDirHeat .app-hcell:hover { outline: 2px solid var(--accent); }
+#jointApps .bar-label { width: 320px; max-width: 42vw; }
+#appDirHeat .hm-dir { width: 170px; }

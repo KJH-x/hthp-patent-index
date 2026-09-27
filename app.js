@@ -50,6 +50,7 @@
   let FAMILY_INDEX = new Map();          // H2：FAM → {main, members[], size}
   let FAVS = [];                         // H4：收藏 PN（localStorage）
   let KW_STATS = null;                   // H9：词频/共现统计缓存
+  let KW_STATS_N = -1;                   // 缓存对应的 PATENTS 长度（分片加载中防空缓存）
   let detailPn = "";                     // H4：当前打开详情的 PN（深链用）
   let detailList = [];                   // H7：详情 prev/next 定位的当前结果集
   let detailIdx = -1;
@@ -74,7 +75,9 @@
     kwUnderline: false,
     theme: "auto",
     familyMode: "all",   // H2："all" | "dedup"
-    favOnly: false       // H4：只看收藏
+    favOnly: false,      // H4：只看收藏
+    mapApp: "",          // H12：专利地图中选中的申请人（布局详情）
+    co: ""               // H12：联合申请组合筛选（\u0001 分隔的申请人列表）
   };
 
   const $ = (s) => document.querySelector(s);
@@ -518,6 +521,7 @@
       if (state.dir && r.Direction !== state.dir) return false;
       if (state.year && r.PBD.slice(0, 4) !== state.year) return false;
       if (state.app && !(r.ANCS || []).includes(state.app)) return false;
+      if (state.co && !state.co.split("\u0001").every((a) => (r.ANCS || []).includes(a))) return false;
       if (state.ipc &&
         !(r.IPCR || []).some((x) => ipcMainGroup(x) === state.ipc) &&
         !(r.CPC || []).some((x) => ipcMainGroup(x) === state.ipc)) return false;
@@ -614,6 +618,16 @@
     $("#resultCount").textContent = state.familyMode === "dedup"
       ? `${total} / ${PATENTS.length} 条（按族去重，共 ${FAMILY_INDEX.size} 族）`
       : `${total} / ${PATENTS.length} 条`;
+
+    const coChip = $("#coChip");
+    if (state.co) {
+      const names = state.co.split("\u0001");
+      coChip.textContent = `联合：${names.join(" ＋ ")} ✕`;
+      coChip.classList.remove("hidden");
+    } else {
+      coChip.textContent = "";
+      coChip.classList.add("hidden");
+    }
 
     $("#tableWrap").classList.toggle("hidden", card);
     $("#cardWrap").classList.toggle("hidden", !card);
@@ -727,7 +741,7 @@
 
   // ---------- H9/H11 专利地图（词云 / 共现网络 / 合作网络 / 地域） ----------
   function computeKwStats() {
-    if (KW_STATS) return KW_STATS;
+    if (KW_STATS && KW_STATS_N === PATENTS.length) return KW_STATS;
     const freq = {}, cooc = {};
     PATENTS.forEach((r) => {
       const text = `${r.TITLE || ""} ${r.ABSTRACT || ""}`;
@@ -746,6 +760,7 @@
       }
     });
     KW_STATS = { freq, cooc };
+    KW_STATS_N = PATENTS.length;
     return KW_STATS;
   }
   function renderKwCloud() {
@@ -805,11 +820,229 @@
     const data = Object.entries(m).sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value }));
     renderBars("#regionChart", data, "country");
   }
+  // ---------- H12 申请人专利布局（专利地图） ----------
+  let APP_INDEX = null, JOINT_INDEX = null;
+  let APP_INDEX_N = -1, JOINT_INDEX_N = -1;
+  const APP_SORT = { key: "count", desc: true };
+  let APP_FILTER = "";
+  const TIER_NAME = { 1: "彩", 2: "金", 3: "紫", 4: "白" };
+
+  function appIndexOf() {
+    if (APP_INDEX && APP_INDEX_N === PATENTS.length) return APP_INDEX;
+    const m = new Map();
+    const ensure = (name) => {
+      let o = m.get(name);
+      if (!o) {
+        o = { name, count: 0, joint: 0, dirs: {}, ipcs: {}, countries: {}, years: {},
+              tiers: { 1: 0, 2: 0, 3: 0, 4: 0 }, legal: {}, partners: {},
+              fams: new Set(), pns: [], qsSum: 0, qsN: 0, minY: "", maxY: "" };
+        m.set(name, o);
+      }
+      return o;
+    };
+    for (const r of PATENTS) {
+      const ancs = [...new Set(r.ANCS || [])];
+      if (!ancs.length) continue;
+      const year = String(r.APD || r.PBD || "").slice(0, 4);
+      const dir = r.Direction || "其他";
+      const ipc = (r.IPCR && r.IPCR.length) ? ipcMainGroup(r.IPCR[0]) : "其他";
+      const country = r.COUNTRY || "未知";
+      const tier = r.Q || 4;
+      const legal = legalBucketOf(r.LEGAL || []);
+      const joint = ancs.length > 1;
+      for (const a of ancs) {
+        const o = ensure(a);
+        o.count++;
+        if (joint) o.joint++;
+        o.dirs[dir] = (o.dirs[dir] || 0) + 1;
+        o.ipcs[ipc] = (o.ipcs[ipc] || 0) + 1;
+        o.countries[country] = (o.countries[country] || 0) + 1;
+        if (year) o.years[year] = (o.years[year] || 0) + 1;
+        o.tiers[tier] = (o.tiers[tier] || 0) + 1;
+        o.legal[legal] = (o.legal[legal] || 0) + 1;
+        if (r.FAM) o.fams.add(r.FAM);
+        o.pns.push(r.PN);
+        if (typeof r.QS === "number") { o.qsSum += r.QS; o.qsN++; }
+        if (year) { if (!o.minY || year < o.minY) o.minY = year; if (!o.maxY || year > o.maxY) o.maxY = year; }
+        if (joint) for (const b of ancs) if (b !== a) o.partners[b] = (o.partners[b] || 0) + 1;
+      }
+    }
+    for (const o of m.values()) {
+      o.m = {
+        name: o.name, count: o.count, joint: o.joint,
+        jointPct: o.count ? Math.round((o.joint / o.count) * 100) : 0,
+        dirsN: Object.keys(o.dirs).length,
+        ipcsN: Object.keys(o.ipcs).length,
+        countriesN: Object.keys(o.countries).length,
+        famN: o.fams.size,
+        famAvg: o.fams.size ? o.count / o.fams.size : 0,
+        tier12: o.tiers[1] + o.tiers[2],
+        span: (o.minY && o.maxY) ? (Number(o.maxY) - Number(o.minY) + 1) : 0,
+        minY: o.minY, maxY: o.maxY,
+        recent: o.maxY || "",
+        avgQ: o.qsN ? o.qsSum / o.qsN : 0
+      };
+    }
+    APP_INDEX = m;
+    APP_INDEX_N = PATENTS.length;
+    return m;
+  }
+
+  function appSortedList() {
+    let arr = [...appIndexOf().values()];
+    if (APP_FILTER) {
+      const q = APP_FILTER.toLowerCase();
+      arr = arr.filter((o) => o.name.toLowerCase().includes(q));
+    }
+    const k = APP_SORT.key, dir = APP_SORT.desc ? -1 : 1;
+    arr.sort((a, b) => {
+      if (k === "name") return dir * String(a.name).localeCompare(String(b.name), "zh");
+      const c = (a.m[k] || 0) - (b.m[k] || 0);
+      return c !== 0 ? dir * c : (b.m.count - a.m.count);
+    });
+    return arr;
+  }
+
+  function renderAppPortfolio() {
+    const arr = appSortedList();
+    const top = arr.slice(0, 60);
+    const max = Math.max(...top.map((o) => o.m.count), 1);
+    const th = (key, label, cls) =>
+      `<th class="sortable${cls ? " " + cls : ""}" data-key="${key}" title="点击排序">${label}${APP_SORT.key === key ? (APP_SORT.desc ? " ▼" : " ▲") : ""}</th>`;
+    const rows = top.map((o) => {
+      const m = o.m;
+      const extra = m.tier12 ? `<span class="app-tag">彩${o.tiers[1]}·金${o.tiers[2]}</span>` : "";
+      return `<tr data-app="${esc(o.name)}"${o.name === state.mapApp ? ' class="active"' : ""} title="点击查看「${esc(o.name)}」布局详情">
+        <td class="app-name">${esc(o.name)}${extra}</td>
+        <td class="num-col"><span class="mini-bar" style="width:${Math.round((m.count / max) * 100)}%"></span>${m.count}</td>
+        <td class="num-col">${m.joint}<span class="pct"> · ${m.jointPct}%</span></td>
+        <td class="num-col">${m.dirsN}</td>
+        <td class="num-col">${m.ipcsN}</td>
+        <td class="num-col">${m.countriesN}</td>
+        <td class="num-col">${m.minY ? `${m.minY}–${m.maxY}` : "—"}</td>
+        <td class="num-col">${m.famAvg ? m.famAvg.toFixed(1) : "—"}</td>
+      </tr>`;
+    }).join("");
+    $("#appPortfolio").innerHTML = `<table class="app-table">
+      <thead><tr>${th("name", "申请人")}${th("count", "件数")}${th("joint", "联合申请")}${th("dirsN", "方向")}${th("ipcsN", "IPC")}${th("countriesN", "国家")}${th("span", "年份跨度")}${th("famAvg", "族均")}</tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" class="empty-cell">无匹配申请人</td></tr>'}</tbody></table>`;
+    $("#appPortfolioHint").textContent = `${arr.length} 位申请人（显示前 ${top.length}）`;
+  }
+
+  function renderAppDirHeat() {
+    const idx = appIndexOf();
+    const apps = [...idx.values()].sort((a, b) => b.m.count - a.m.count).slice(0, 15);
+    const dirTot = {};
+    PATENTS.forEach((r) => { const d = r.Direction || "其他"; dirTot[d] = (dirTot[d] || 0) + 1; });
+    const dirs = Object.entries(dirTot).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([d]) => d);
+    if (!apps.length || !dirs.length) { $("#appDirHeat").innerHTML = '<div class="card-empty">无数据</div>'; return; }
+    let max = 1;
+    apps.forEach((o) => dirs.forEach((d) => { max = Math.max(max, o.dirs[d] || 0); }));
+    const head = `<div class="hm-row hm-head"><span class="hm-dir">技术方向 \\ 申请人</span>` +
+      apps.map((o) => `<span class="hm-cell hm-y" title="${esc(o.name)}（${o.m.count} 件）">${esc(o.name.length > 4 ? o.name.slice(0, 4) + "…" : o.name)}</span>`).join("") +
+      `<span class="hm-tot">合计</span></div>`;
+    const rows = dirs.map((d) => {
+      let tot = 0;
+      const cells = apps.map((o) => {
+        const c = o.dirs[d] || 0; tot += c;
+        return c
+          ? `<span class="hm-cell hcell app-hcell" data-app="${esc(o.name)}" data-dir="${esc(d)}" title="${esc(o.name)} · ${esc(d)}：${c} 件（点击下钻）" style="--a:${(c / max).toFixed(3)}">${c}</span>`
+          : `<span class="hm-cell" title="${esc(o.name)} · ${esc(d)}：0 件"></span>`;
+      }).join("");
+      return `<div class="hm-row"><span class="hm-dir" title="${esc(d)}">${esc(d)}</span>${cells}<span class="hm-tot">${tot}</span></div>`;
+    }).join("");
+    $("#appDirHeat").innerHTML = head + rows;
+  }
+
+  function renderAppProfile(name) {
+    const idx = appIndexOf();
+    let o = name ? idx.get(name) : null;
+    if (!o) o = [...idx.values()].sort((a, b) => b.m.count - a.m.count)[0];
+    if (!o) { $("#appProfileName").textContent = "—"; $("#appProfile").innerHTML = '<div class="card-empty">无数据</div>'; return; }
+    state.mapApp = o.name;
+    const m = o.m;
+    $("#appProfileName").textContent = `${o.name}（${m.count} 件${m.jointPct ? ` · 联合 ${m.jointPct}%` : ""}）`;
+    const yearData = Object.keys(o.years).sort().map((y) => ({ label: y, value: o.years[y] }));
+    const dirData = Object.entries(o.dirs).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, value]) => ({ label, value }));
+    const ipcData = Object.entries(o.ipcs).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, value]) => ({ label, value }));
+    const countryData = Object.entries(o.countries).sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value }));
+    const legalData = Object.entries(o.legal).sort((a, b) => b[1] - a[1]).map(([label, value]) => ({ label, value }));
+    const partners = Object.entries(o.partners).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const pMax = partners.length ? partners[0][1] : 1;
+    const topPatents = o.pns.map((pn) => PATENTS.find((r) => r.PN === pn)).filter(Boolean)
+      .sort((a, b) => (Number(b.QS || 0) - Number(a.QS || 0)) || String(b.PBD || "").localeCompare(String(a.PBD || "")))
+      .slice(0, 10);
+    const chips = [1, 2, 3, 4].map((t) => `<span class="tier-chip tier-${t}">${TIER_NAME[t]} <b>${o.tiers[t]}</b></span>`).join("");
+    $("#appProfile").innerHTML = `
+      <div class="profile-sum">
+        <button type="button" class="export-btn" id="apfToList">在列表中查看全部 ${m.count} 件</button>
+        <span class="muted">方向 ${m.dirsN} · IPC ${m.ipcsN} · 国家 ${m.countriesN} · 族 ${m.famN}（族均 ${m.famAvg ? m.famAvg.toFixed(1) : "—"}） · 年份 ${m.minY || "—"}–${m.maxY || "—"} · 平均质量分 ${m.avgQ ? m.avgQ.toFixed(1) : "—"}</span>
+      </div>
+      <div class="profile-secs">
+        <div class="profile-sec"><h4>年度申请趋势（点击下钻）</h4><div id="apfYear" class="chart"></div></div>
+        <div class="profile-sec"><h4>技术方向构成（点击下钻）</h4><div id="apfDir" class="chart"></div></div>
+        <div class="profile-sec"><h4>IPC 主组 TOP8（点击下钻）</h4><div id="apfIpc" class="chart"></div></div>
+        <div class="profile-sec"><h4>国家 / 地区（点击下钻）</h4><div id="apfCountry" class="chart"></div></div>
+        <div class="profile-sec"><h4>法律状态构成</h4><div id="apfLegal" class="chart"></div></div>
+        <div class="profile-sec"><h4>质量分级构成</h4><div class="tier-chips">${chips}</div>
+          <h4 style="margin-top:12px">联合申请人 TOP10（点击切换布局）</h4><div id="apfPartner" class="chart"></div></div>
+        <div class="profile-sec full"><h4>代表专利 TOP10（按质量分排序）</h4><ul class="mini-list" id="apfTop"></ul></div>
+      </div>`;
+    renderBars("#apfYear", yearData, "year");
+    renderBars("#apfDir", dirData, "dir");
+    renderBars("#apfIpc", ipcData, "ipc");
+    renderBars("#apfCountry", countryData, "country");
+    renderBars("#apfLegal", legalData, null);
+    $("#apfPartner").innerHTML = partners.map(([pname, cnt]) =>
+      `<div class="bar-row clickable" data-partner="${esc(pname)}" role="button" tabindex="0" title="${esc(pname)}：合作 ${cnt} 件，点击查看其布局">
+        <div class="bar-label" title="${esc(pname)}">${esc(pname)}</div>
+        <div class="bar-track"><div class="bar" style="width:${(cnt / pMax) * 100}%"></div></div>
+        <div class="bar-val">${cnt}</div></div>`).join("") || '<div class="muted">无联合申请</div>';
+    $("#apfTop").innerHTML = topPatents.map((r) =>
+      `<li class="mini-patent" data-pn="${esc(r.PN)}" tabindex="0" title="点击查看详情">${tierBadgeHtml(r)}<span class="pn">${esc(r.PN)}</span> <span class="mini-year">${esc(r.PBD || "")}</span> ${esc((r.TITLE || "").length > 40 ? r.TITLE.slice(0, 40) + "…" : r.TITLE || "—")}</li>`).join("")
+      || '<li class="muted">无</li>';
+  }
+
+  function jointIndexOf() {
+    if (JOINT_INDEX && JOINT_INDEX_N === PATENTS.length) return JOINT_INDEX;
+    const m = new Map();
+    for (const r of PATENTS) {
+      const ancs = [...new Set(r.ANCS || [])];
+      if (ancs.length < 2) continue;
+      const names = ancs.slice().sort();
+      const key = names.join("\u0001");
+      let o = m.get(key);
+      if (!o) { o = { names, count: 0, minY: "", maxY: "" }; m.set(key, o); }
+      o.count++;
+      const y = String(r.APD || r.PBD || "").slice(0, 4);
+      if (y) { if (!o.minY || y < o.minY) o.minY = y; if (!o.maxY || y > o.maxY) o.maxY = y; }
+    }
+    JOINT_INDEX = m;
+    JOINT_INDEX_N = PATENTS.length;
+    return m;
+  }
+
+  function renderJointApps() {
+    const arr = [...jointIndexOf().values()].sort((a, b) => b.count - a.count).slice(0, 25);
+    const max = arr.length ? arr[0].count : 1;
+    $("#jointApps").innerHTML = arr.map((o) => {
+      const label = o.names.join(" ＋ ");
+      return `<div class="bar-row clickable" data-joint="${esc(o.names.join("\u0001"))}" role="button" tabindex="0" title="${esc(label)}：${o.count} 件（${o.minY}–${o.maxY}），点击在列表中筛出共同申请">
+        <div class="bar-label" title="${esc(label)}">${esc(label)}</div>
+        <div class="bar-track"><div class="bar" style="width:${(o.count / max) * 100}%"></div></div>
+        <div class="bar-val">${o.count}</div></div>`;
+    }).join("") || '<div class="card-empty">无联合申请</div>';
+  }
+
   function renderMap() {
     renderKwCloud();
     renderKwNet();
     renderAppNet();
     renderRegion();
+    renderAppDirHeat();
+    renderAppPortfolio();
+    renderAppProfile(state.mapApp);
+    renderJointApps();
   }
   // 通用零依赖网络图：圆形布局 SVG，节点大小=count，边粗细/透明度=共现权重
   function renderNetwork(el, opts) {
@@ -885,6 +1118,20 @@
       if (wrap) wrap.scrollTop = 0;
     });
   }
+  // H12：在以某申请人为前提的下钻（保留 state.app）
+  function drillApp(facet, value) {
+    if (state.mapApp) state.app = state.mapApp;
+    drill(facet, value);
+  }
+  // H12：按联合申请组合筛出共同申请的专利
+  function drillCo() {
+    state.app = "";
+    state.page = 1;
+    switchView("list");
+    syncFilterControls();
+    render();
+    requestAnimationFrame(() => $("#view-list").scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
   function syncFilterControls() {
     $("#searchInput").value = state.q;
     const setSel = (id, val) => {
@@ -915,6 +1162,8 @@
     push("c", state.country);
     push("t", state.tier);
     push("rr", state.rel);
+    push("ma", state.mapApp);
+    push("co", state.co);
     if (state.sortKey !== "PBD" || !state.sortDesc) {
       p.push(`s=${state.sortKey}`);
       if (!state.sortDesc) p.push("o=asc");
@@ -936,6 +1185,8 @@
     state.country = qs.get("c") || "";
     state.tier = qs.get("t") || "";
     state.rel = qs.get("rr") || "";
+    state.mapApp = qs.get("ma") || "";
+    state.co = qs.get("co") || "";
     state.tier = qs.get("t") || "";
     const s = qs.get("s");
     state.sortKey = s && ["PN", "TITLE", "ANCS", "PBD", "Direction"].includes(s) ? s : "PBD";
@@ -1274,7 +1525,7 @@
     const row = e.target.closest(".bar-row[data-facet]");
     if (row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); drill(row.dataset.facet, row.dataset.label); }
   });
-  // H9/H11：专利地图区下钻（容器级委托）
+  // H9/H11/H12：专利地图区下钻（容器级委托）
   $("#view-map").addEventListener("click", (e) => {
     const kw = e.target.closest(".kw-word");
     if (kw) { drill("kw", kw.dataset.kw); return; }
@@ -1283,8 +1534,38 @@
     const appNode = e.target.closest("#appNet .net-node");
     if (appNode) { drill("app", appNode.dataset.name); return; }
     const regionRow = e.target.closest("#regionChart .bar-row[data-facet]");
-    if (regionRow) drill(regionRow.dataset.facet, regionRow.dataset.label);
+    if (regionRow) { drill(regionRow.dataset.facet, regionRow.dataset.label); return; }
+    // H12：申请人布局
+    const heatCell = e.target.closest("#appDirHeat .app-hcell");
+    if (heatCell) { state.mapApp = heatCell.dataset.app; drillApp("dir", heatCell.dataset.dir); return; }
+    const appRow = e.target.closest("#appPortfolio tr[data-app]");
+    if (appRow) { state.mapApp = appRow.dataset.app; renderAppPortfolio(); renderAppProfile(appRow.dataset.app); syncHash(); $("#appProfile").scrollIntoView({ block: "nearest" }); return; }
+    const apfToList = e.target.closest("#apfToList");
+    if (apfToList) { state.co = ""; drill("app", state.mapApp); return; }
+    const partner = e.target.closest("#apfPartner .bar-row[data-partner]");
+    if (partner) { state.mapApp = partner.dataset.partner; renderAppPortfolio(); renderAppProfile(partner.dataset.partner); syncHash(); return; }
+    const apBar = e.target.closest("#appProfile .bar-row[data-facet]");
+    if (apBar) { drillApp(apBar.dataset.facet, apBar.dataset.label); return; }
+    const jointRow = e.target.closest("#jointApps .bar-row[data-joint]");
+    if (jointRow) { state.co = jointRow.dataset.joint; drillCo(); return; }
+    const mini = e.target.closest(".mini-patent[data-pn]");
+    if (mini) { showDetail(mini.dataset.pn); return; }
   });
+  $("#view-map").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const el = e.target.closest(".bar-row[data-partner], .bar-row[data-joint], .mini-patent[data-pn], #appPortfolio tr[data-app]");
+    if (el) { e.preventDefault(); el.click(); }
+  });
+  $("#appSearch").addEventListener("input", (e) => { APP_FILTER = e.target.value.trim(); renderAppPortfolio(); });
+  $("#appPortfolio").addEventListener("click", (e) => {
+    const th = e.target.closest("th.sortable[data-key]");
+    if (!th) return;
+    const k = th.dataset.key;
+    if (APP_SORT.key === k) APP_SORT.desc = !APP_SORT.desc;
+    else { APP_SORT.key = k; APP_SORT.desc = k !== "name"; }
+    renderAppPortfolio();
+  });
+  $("#coChip").addEventListener("click", () => { state.co = ""; render(); syncHash(); });
   // H4：hash 外部变化（手改地址栏 / 前进后退 / 粘贴深链）
   window.addEventListener("hashchange", () => {
     applyHashToState(location.hash);
