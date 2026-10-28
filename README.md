@@ -24,6 +24,7 @@ hthp-patent/
 │   └── stats.json      # 统计汇总（年份/方向/申请人）
 ├── scripts/
 │   ├── assert-data.mjs         # 数据不变量校验（发布门槛，零依赖 Node）
+│   ├── dev-server.mjs          # 本地预览（端口 8123，SPA 回退，零依赖）
 │   ├── probe-detail-fields.mjs # H1 1b 字段探测（需登录，见其头部注释）
 │   └── RE-SCRAPE-DESIGN.md     # H1 1b 回补设计（CLAIMS/PRD/引证/优先权/过期日）
 └── README.md
@@ -31,10 +32,38 @@ hthp-patent/
 
 > **分段加载（性能）**：站点读取 `data/manifest.json`，以并发 4 分片渐进加载 `patents_*.json`，
 > **首个分片到达即渲染列表/卡片**（优先保证列表体验），随后后台补齐其余分片并刷新统计/搜索；
-> 顶部 meta 行显示加载进度。深链 `#p=PN` 若所在分片未就绪会自动暂存、就绪后打开。
+> 顶部 meta 行显示加载进度。深链 `/list?pn=PN` 若所在分片未就绪会自动暂存、就绪后打开。
 > 重新导出数据（源工作区 `data/export_site_data.ps1`）会自动生成分片与 manifest。
 
 > `pdf/` 目录**不提交到本仓库**（内网专用，见下）。
+
+## 路由与深链（History API）
+
+站点使用路径路由（无 `#`），前进/后退可用，任意状态可分享：
+
+| 路径 | 说明 |
+|------|------|
+| `/list` | 专利列表（唯一携带筛选条件与分页的视图） |
+| `/stats` | 统计分析 |
+| `/map` | 专利地图（`ma` 为选中的申请人） |
+
+查询参数：`query, dir, year, app`（可重复，多选）`, applike, ipc, legal, country, tier, rel, co, sort, order, page, size, pn, ma`。
+仅写入非默认值（`size=100`、`page=1`、`sort=PBD`、`order=desc` 省略）。
+
+示例：
+
+- `/list?query=卡诺电池&pn=CN114812273A` — 搜索「卡诺电池」并打开该专利详情
+- `/list?dir=蒸汽压缩&year=2025&sort=PN&order=asc`
+- `/map?ma=清华大学`
+- `/stats`
+
+首屏以外的路径会被规范化为 `/list`（`/` 与未知路径替换为 `/list`，尾部斜杠去除，均不新增历史条目）。
+
+本地预览（SPA 回退，直接访问 `/list`、`/stats`、`/map` 均可用）：
+
+```powershell
+node scripts/dev-server.mjs   # http://127.0.0.1:8123/
+```
 
 ## 数据来源与更新
 

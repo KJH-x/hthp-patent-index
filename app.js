@@ -63,6 +63,7 @@
     year: "",
     app: "",          // 兼容旧字段，已不使用（申请人改为 state.apps 多选）
     apps: [],         // P3：申请人多选（任一命中；ANCS 的 OR 语义）
+    applike: "",      // P4：申请人模糊筛选（URL 参数 applike，子串匹配）
     ipc: "",          // H3/H6：IPC 主组筛选（下钻目标）
     legal: "",        // H3：法律四桶筛选（下钻目标）
     country: "",      // H11：地域筛选（下钻目标）
@@ -365,7 +366,9 @@
 
   // ---------- 渐进式分段加载（优先渲染列表/卡片，统计/详情随后） ----------
   let shardLoading = false;
-  let pendingDetailPn = "";
+  let PENDING_PN = "";                   // P4：深链 PN（分片未就绪时暂存，解析成功后清空）
+  let PUSH_NEXT = false;                 // P4：下一次 syncUrl 是否写入新历史条目
+  let DETAIL_PUSHED = false;             // P4：详情弹层是否已写入历史条目
   let renderTimer = null;
 
   function updateMeta(loadedCount, total, done) {
@@ -398,35 +401,31 @@
   }
 
   function tryOpenPendingDetail() {
-    if (!pendingDetailPn) return false;
-    if (PATENTS.some((r) => r.PN === pendingDetailPn)) {
-      const pn = pendingDetailPn;
-      pendingDetailPn = "";
-      showDetail(pn);
+    if (!PENDING_PN) return false;
+    if (PATENTS.some((r) => r.PN === PENDING_PN)) {
+      const pn = PENDING_PN;
+      PENDING_PN = "";
+      showDetail(pn, { restore: true });
       return true;
     }
     return false;
   }
 
   async function load() {
-    const statsP = fetch("data/stats.json").then((r) => r.json()).catch(() => null);
+    const statsP = fetch("/data/stats.json").then((r) => r.json()).catch(() => null);
     let manifest = null;
-    try { manifest = await fetch("data/manifest.json").then((r) => r.json()); } catch (e) { manifest = null; }
-
-    const m = /(?:^|&)p=([^&]*)/.exec((location.hash || "").replace(/^#/, ""));
-    if (m) pendingDetailPn = decodeURIComponent(m[1]);
-    applyHashToState(location.hash);
+    try { manifest = await fetch("/data/manifest.json").then((r) => r.json()); } catch (e) { manifest = null; }
 
     // 分片清单（无 manifest 时退回单文件，保持向后兼容）
     const shardUrls = (manifest && Array.isArray(manifest.shards) && manifest.shards.length)
-      ? manifest.shards.map((s) => "data/" + s)
-      : ["data/patents.json"];
+      ? manifest.shards.map((s) => "/data/" + s)
+      : ["/data/patents.json"];
     const total = (manifest && manifest.total) || 0;
 
     STATS = await statsP;
     if (!STATS) STATS = { total: 0, byYear: [], byDir: [], topApplicants: [], updated: "" };
-    switchView(state.view);
     shardLoading = true;
+    applyUrl();
     updateMeta(0, total, false);
 
     const results = new Array(shardUrls.length);
@@ -459,7 +458,10 @@
     shardLoading = false;
     afterDataGrew();
     updateMeta(PATENTS.length, total, true);
-    if (!tryOpenPendingDetail() && detailPn) showDetail(detailPn);
+    if (!tryOpenPendingDetail()) {
+      PENDING_PN = "";                       // 全部分片加载完仍未找到该 PN
+      if (detailPn) showDetail(detailPn, { replace: true });
+    }
     render();
   }
 
@@ -526,6 +528,10 @@
       if (state.year && r.PBD.slice(0, 4) !== state.year) return false;
       if (state.apps && state.apps.length &&
         !state.apps.some((a) => (r.ANCS || []).includes(a))) return false;
+      if (state.applike) {
+        const needle = state.applike.toLowerCase();
+        if (!(r.ANCS || []).some((a) => String(a).toLowerCase().includes(needle))) return false;
+      }
       if (state.co && !state.co.split("|").every((a) => (r.ANCS || []).includes(a))) return false;
       if (state.ipc &&
         !(r.IPCR || []).some((x) => ipcMainGroup(x) === state.ipc) &&
@@ -682,7 +688,7 @@
 
     if (state.view === "stats") renderStats();
     if (state.view === "map") renderMap();
-    syncHash();
+    syncUrl();
   }
 
   // ---------- H3 统计面板 ----------
@@ -1031,6 +1037,11 @@
   function renderAppProfile(name) {
     const idx = appIndexOf();
     let o = name ? idx.get(name) : null;
+    if (!o && name && shardLoading) {
+      $("#appProfileName").textContent = `${name}（加载中…）`;
+      $("#appProfile").innerHTML = '<div class="card-empty">加载中…</div>';
+      return;
+    }
     if (!o) o = [...idx.values()].sort((a, b) => b.m.count - a.m.count)[0];
     if (!o) { $("#appProfileName").textContent = "—"; $("#appProfile").innerHTML = '<div class="card-empty">无数据</div>'; return; }
     state.mapApp = o.name;
@@ -1151,17 +1162,19 @@
     el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.aria || "共现网络")}" class="net-svg">${lines}${circles}</svg>`;
   }
 
-  // ---------- H4 视图/下钻/URL 同步 ----------
-  function switchView(view) {
+  // ---------- P4 视图/下钻/URL 同步 ----------
+  function switchView(view, opts) {
     state.view = view;
     $$(".tab").forEach((x) => x.classList.toggle("active", x.dataset.view === view));
     $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
+    if (opts && opts.push) PUSH_NEXT = true;
     if (view === "stats") renderStats();
     if (view === "map") renderMap();
-    syncHash();
+    syncUrl();
   }
   // 统计/地图下钻：写入 state → 切列表 → 回填筛选控件 → render → 滚到列表
   function drill(facet, value) {
+    PUSH_NEXT = true;
     switch (facet) {
       case "year": state.year = value; break;
       case "dir": state.dir = value; break;
@@ -1194,6 +1207,7 @@
   }
   // H12：按联合申请组合筛出共同申请的专利
   function drillCo() {
+    PUSH_NEXT = true;
     state.app = "";
     state.apps = [];
     state.page = 1;
@@ -1478,6 +1492,7 @@
     applyApps();
   }
   function applyApps() {
+    PUSH_NEXT = true;
     state.page = 1;
     const sel = $("#appFilter");
     if (sel) sel.value = (state.apps && state.apps[0]) || "";
@@ -1514,7 +1529,7 @@
   function hasActiveFilters() {
     return Boolean(
       state.q || state.dir || state.year ||
-      (Array.isArray(state.apps) && state.apps.length) ||
+      (Array.isArray(state.apps) && state.apps.length) || state.applike ||
       state.ipc || state.legal || state.country ||
       state.tier || state.rel || state.co ||
       state.familyMode === "dedup" || state.favOnly
@@ -1522,11 +1537,13 @@
   }
 
   function clearAllFilters() {
+    PUSH_NEXT = true;
     state.q = "";
     state.dir = "";
     state.year = "";
     state.app = "";
     state.apps = [];
+    state.applike = "";
     state.ipc = "";
     state.legal = "";
     state.country = "";
@@ -1544,59 +1561,104 @@
     render();
   }
 
-  // hash 字段：q/y/d/a/i/l/c/s/o/ps/pg/v/p
-  function stateToHash() {
-    const p = [];
-    const push = (k, v) => { if (v !== "" && v != null) p.push(`${k}=${encodeURIComponent(String(v))}`); };
-    push("q", state.q.trim());
-    push("y", state.year);
-    push("d", state.dir);
-    push("a", (state.apps || []).join("|"));
-    push("i", state.ipc);
-    push("l", state.legal);
-    push("c", state.country);
-    push("t", state.tier);
-    push("rr", state.rel);
-    push("ma", state.mapApp);
-    push("co", state.co);
-    if (state.sortKey !== "PBD" || !state.sortDesc) {
-      p.push(`s=${state.sortKey}`);
-      if (!state.sortDesc) p.push("o=asc");
+  // ---------- P4 路径路由（History API） ----------
+  const VIEWS = ["list", "stats", "map"];
+
+  // 序列化：只写非默认值；筛选条件仅列表视图携带，ma 仅地图视图携带
+  function buildQuery(view) {
+    const p = new URLSearchParams();
+    if (view === "map") {
+      if (state.mapApp) p.set("ma", state.mapApp);
+      return p;
     }
-    push("ps", state.pageSize === "all" ? "all" : state.pageSize);
-    if (state.page > 1) push("pg", state.page);
-    if (state.view !== "list") push("v", state.view);
-    if (detailPn) push("p", detailPn);
-    return p.join("&");
+    if (view !== "list") return p;
+    if (state.q && state.q.trim()) p.set("query", state.q.trim());
+    if (state.dir) p.set("dir", state.dir);
+    if (state.year) p.set("year", state.year);
+    (state.apps || []).forEach((a) => { if (a) p.append("app", a); });
+    if (state.applike) p.set("applike", state.applike);
+    if (state.ipc) p.set("ipc", state.ipc);
+    if (state.legal) p.set("legal", state.legal);
+    if (state.country) p.set("country", state.country);
+    if (state.tier) p.set("tier", state.tier);
+    if (state.rel !== "") p.set("rel", state.rel);
+    if (state.co) p.set("co", state.co);
+    if (state.sortKey !== "PBD") p.set("sort", state.sortKey);
+    if (!state.sortDesc) p.set("order", "asc");
+    if (state.page > 1) p.set("page", String(state.page));
+    if (state.pageSize !== 100) p.set("size", state.pageSize === "all" ? "all" : String(state.pageSize));
+    const pn = detailPn || PENDING_PN;
+    if (pn) p.set("pn", pn);
+    return p;
   }
-  function applyHashToState(h) {
-    const qs = new URLSearchParams((h || "").replace(/^#/, ""));
-    state.q = qs.get("q") || "";
-    state.year = qs.get("y") || "";
-    state.dir = qs.get("d") || "";
+
+  function urlFor(view) {
+    const qs = buildQuery(view).toString();
+    return "/" + view + (qs ? "?" + qs : "");
+  }
+
+  function refreshTabHrefs() {
+    $$(".tab").forEach((t) => t.setAttribute("href", urlFor(t.dataset.view)));
+  }
+
+  // URL 写入：PUSH_NEXT 存在时新增历史条目，否则替换（render 内一律 replace）
+  function syncUrl(mode) {
+    let m = mode === "push" ? "push" : "replace";
+    if (PUSH_NEXT) { m = "push"; PUSH_NEXT = false; }
+    const next = urlFor(state.view);
+    if (location.pathname + location.search === next) { refreshTabHrefs(); return; }
+    history[m + "State"](null, "", next);
+    refreshTabHrefs();
+  }
+
+  // 路径规范化：/ → /list；未知路径 → /list（保留 query）；去尾部斜杠
+  function normalizePath() {
+    const qs = location.search || "";
+    const seg = (location.pathname || "/").replace(/\/+$/, "");
+    let view = seg.replace(/^\//, "");
+    if (!VIEWS.includes(view)) view = "list";
+    const target = "/" + view + qs;
+    if (location.pathname + qs !== target) history.replaceState(null, "", target);
+    return view;
+  }
+
+  function applyUrl() {
+    PUSH_NEXT = false;
+    const view = normalizePath();
+    const qs = new URLSearchParams(location.search);
+    state.view = view;
+    state.q = qs.get("query") || "";
+    state.dir = qs.get("dir") || "";
+    state.year = qs.get("year") || "";
     state.app = "";
-    state.apps = (qs.get("a") || "").split("|").filter(Boolean);
-    state.ipc = qs.get("i") || "";
-    state.legal = qs.get("l") || "";
-    state.country = qs.get("c") || "";
-    state.tier = qs.get("t") || "";
-    state.rel = qs.get("rr") || "";
-    state.mapApp = qs.get("ma") || "";
+    state.apps = qs.getAll("app").filter(Boolean);
+    state.applike = qs.get("applike") || "";
+    state.ipc = qs.get("ipc") || "";
+    state.legal = qs.get("legal") || "";
+    state.country = qs.get("country") || "";
+    state.tier = qs.get("tier") || "";
+    state.rel = qs.get("rel") || "";
     state.co = qs.get("co") || "";
-    const s = qs.get("s");
+    const s = qs.get("sort");
     state.sortKey = s && ["PN", "TITLE", "ANCS", "PBD", "Direction"].includes(s) ? s : "PBD";
-    state.sortDesc = qs.get("o") !== "asc";
-    const ps = qs.get("ps");
-    state.pageSize = ps === "all" ? "all" : (ps && +ps > 0 ? +ps : 100);
-    state.page = Math.max(1, +qs.get("pg") || 1);
-    const v = qs.get("v");
-    state.view = (v === "stats" || v === "map") ? v : "list";
-  }
-  function syncHash() {
-    const next = "#" + stateToHash();
-    if (next === "#" && !location.hash) return;
-    if (location.hash === next) return;
-    try { history.replaceState(null, "", next); } catch (e) { location.hash = next; }
+    state.sortDesc = qs.get("order") !== "asc";
+    const size = qs.get("size");
+    state.pageSize = size === "all" ? "all" : (size && +size > 0 ? +size : 100);
+    state.page = Math.max(1, +qs.get("page") || 1);
+    state.mapApp = qs.get("ma") || "";
+    const pn = view === "list" ? (qs.get("pn") || "") : "";
+    const found = pn && PATENTS.some((r) => r.PN === pn);
+    detailPn = found ? pn : "";
+    PENDING_PN = found ? "" : (shardLoading ? pn : "");
+    DETAIL_PUSHED = false;
+    switchView(state.view, { fromUrl: true });
+    syncFilterControls();
+    render();
+    if (found) showDetail(pn, { restore: true });
+    else {
+      if (!$("#detailModal").classList.contains("hidden")) hideDetail();
+      PENDING_PN = shardLoading ? pn : "";
+    }
   }
 
   // ---------- H7 详情 prev/next ----------
@@ -1605,8 +1667,8 @@
     if (prev) prev.disabled = detailIdx <= 0;
     if (next) next.disabled = detailIdx >= detailList.length - 1;
   }
-  function goPrev() { if (detailIdx > 0) showDetail(detailList[detailIdx - 1].PN); }
-  function goNext() { if (detailIdx < detailList.length - 1) showDetail(detailList[detailIdx + 1].PN); }
+  function goPrev() { if (detailIdx > 0) showDetail(detailList[detailIdx - 1].PN, { replace: true }); }
+  function goNext() { if (detailIdx < detailList.length - 1) showDetail(detailList[detailIdx + 1].PN, { replace: true }); }
 
   // ---------- 详情 ----------
   function familyFieldHtml(r) {
@@ -1630,7 +1692,7 @@
     return `<div class="field"><span class="label">🔍 相似专利</span><div class="value">${btns.join("")}</div></div>`;
   }
 
-  function showDetail(pn) {
+  function showDetail(pn, opts) {
     const r = PATENTS.find((x) => x.PN === pn);
     if (!r) return;
     const terms = splitTerms(state.q);
@@ -1696,17 +1758,30 @@
         <a class="pdf-open" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 打开官方PDF（内网）</a>
       </div>`;
     detailPn = pn;
+    PENDING_PN = "";
     $("#detailModal").classList.remove("hidden");
     const mcontent = $("#detailModal .modal-content");
     if (mcontent) mcontent.focus();
-    syncHash();
+    if (opts && opts.restore) DETAIL_PUSHED = false;
+    else if (opts && opts.replace) { /* prev/next：仅替换当前条目，保留已有标记 */ }
+    else if (state.view === "list") { PUSH_NEXT = true; DETAIL_PUSHED = true; }
+    else DETAIL_PUSHED = false;   // 统计/地图视图 URL 不含 pn，不写历史
+    syncUrl();
+  }
+
+  function hideDetail() {
+    $("#detailModal").classList.add("hidden");
+    detailPn = "";
+    PENDING_PN = "";
+    DETAIL_PUSHED = false;
+    if (lastFocus && lastFocus.isConnected && typeof lastFocus.focus === "function") lastFocus.focus();
   }
 
   function closeDetail() {
-    $("#detailModal").classList.add("hidden");
-    detailPn = "";
-    syncHash();
-    if (lastFocus && lastFocus.isConnected && typeof lastFocus.focus === "function") lastFocus.focus();
+    if ($("#detailModal").classList.contains("hidden")) return;
+    if (DETAIL_PUSHED) { history.back(); return; }
+    hideDetail();
+    syncUrl("replace");
   }
 
   // ---------- H4 CSV 导出 ----------
@@ -1810,37 +1885,60 @@
 
   // events
   let searchTimer;
+  let searchStartValue = null;
+  $("#searchInput").addEventListener("focus", (e) => { searchStartValue = e.target.value; });
   $("#searchInput").addEventListener("input", (e) => {
     state.q = e.target.value; state.page = 1;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => render(), 160);   // H10：输入防抖
+    searchTimer = setTimeout(() => render(), 160);   // H10：输入防抖（replace，不写历史）
   });
-  $("#dirFilter").addEventListener("change", (e) => { state.dir = e.target.value; state.page = 1; render(); });
-  $("#yearFilter").addEventListener("change", (e) => { state.year = e.target.value; state.page = 1; render(); });
+  $("#searchInput").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    clearTimeout(searchTimer);
+    state.q = e.target.value; state.page = 1;
+    PUSH_NEXT = true;
+    render();
+  });
+  $("#searchInput").addEventListener("blur", (e) => {
+    const changed = searchStartValue !== null && e.target.value !== searchStartValue;
+    searchStartValue = e.target.value;
+    if (!changed) return;
+    clearTimeout(searchTimer);
+    state.q = e.target.value; state.page = 1;
+    PUSH_NEXT = true;
+    render();
+  });
+  $("#dirFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.dir = e.target.value; state.page = 1; render(); });
+  $("#yearFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.year = e.target.value; state.page = 1; render(); });
   $("#appFilter").addEventListener("change", (e) => {
+    PUSH_NEXT = true;
     state.apps = e.target.value ? [e.target.value] : [];
     state.page = 1;
     render();
     syncDropdowns();
   });
-  $("#ipcFilter").addEventListener("change", (e) => { state.ipc = e.target.value; state.page = 1; render(); });
-  $("#legalFilter").addEventListener("change", (e) => { state.legal = e.target.value; state.page = 1; render(); });
-  $("#countryFilter").addEventListener("change", (e) => { state.country = e.target.value; state.page = 1; render(); });
-  $("#tierFilter").addEventListener("change", (e) => { state.tier = e.target.value; state.page = 1; render(); });
-  $("#relFilter").addEventListener("change", (e) => { state.rel = e.target.value; state.page = 1; render(); });
+  $("#ipcFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.ipc = e.target.value; state.page = 1; render(); });
+  $("#legalFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.legal = e.target.value; state.page = 1; render(); });
+  $("#countryFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.country = e.target.value; state.page = 1; render(); });
+  $("#tierFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.tier = e.target.value; state.page = 1; render(); });
+  $("#relFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.rel = e.target.value; state.page = 1; render(); });
   $("#pageSize").addEventListener("change", (e) => {
+    PUSH_NEXT = true;
     state.pageSize = e.target.value === "all" ? "all" : +e.target.value;
     state.page = 1;
     render();
   });
-  $("#prevBtn").addEventListener("click", () => { state.page--; render(); });
-  $("#nextBtn").addEventListener("click", () => { state.page++; render(); });
+  $("#prevBtn").addEventListener("click", () => { PUSH_NEXT = true; state.page--; render(); });
+  $("#nextBtn").addEventListener("click", () => { PUSH_NEXT = true; state.page++; render(); });
   $("#famToggle").addEventListener("change", (e) => {
+    PUSH_NEXT = true;
     state.familyMode = e.target.checked ? "dedup" : "all";
     state.page = 1;
     render();
   });
   $("#favToggle").addEventListener("change", (e) => {
+    PUSH_NEXT = true;
     state.favOnly = e.target.checked;
     state.page = 1;
     render();
@@ -1854,7 +1952,7 @@
     const sp = e.target.closest(".sim-pn");
     if (sp) { e.stopPropagation(); showDetail(sp.dataset.pn); return; }
     const tag = e.target.closest(".ipc-tag, .sim-btn");
-    if (tag) { e.stopPropagation(); const f = tag.dataset.facet, l = tag.dataset.label; closeDetail(); drill(f, l); return; }
+    if (tag) { e.stopPropagation(); const f = tag.dataset.facet, l = tag.dataset.label; hideDetail(); drill(f, l); return; }
     if (e.target.closest("#detailPrev")) { e.stopPropagation(); goPrev(); return; }
     if (e.target.closest("#detailNext")) { e.stopPropagation(); goNext(); return; }
   });
@@ -1893,7 +1991,7 @@
     render();
   });
   $("#modalCopy").addEventListener("click", async () => {
-    const url = location.origin + location.pathname + "#" + stateToHash();
+    const url = location.origin + urlFor(state.view);
     try {
       await navigator.clipboard.writeText(url);
       flashBtn($("#modalCopy"), "已复制 ✓");
@@ -1914,10 +2012,15 @@
     resizeTimer = setTimeout(() => { if (state.viewMode === "auto") render(); }, 150);
   });
   $$(".tab").forEach((t) => {
-    t.addEventListener("click", () => switchView(t.dataset.view));
+    t.addEventListener("click", (e) => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;  // 新标签页打开
+      e.preventDefault();
+      switchView(t.dataset.view, { push: true });
+    });
   });
   $$("#patentTable th.sortable").forEach((th) => {
     th.addEventListener("click", () => {
+      PUSH_NEXT = true;
       const k = th.dataset.key;
       if (state.sortKey === k) state.sortDesc = !state.sortDesc;
       else { state.sortKey = k; state.sortDesc = (k === "PBD" || k === "PN"); }
@@ -1956,11 +2059,11 @@
     const heatCell = e.target.closest("#appDirHeat .app-hcell");
     if (heatCell) { state.mapApp = heatCell.dataset.app; drillApp("dir", heatCell.dataset.dir); return; }
     const appRow = e.target.closest("#appPortfolio tr[data-app]");
-    if (appRow) { state.mapApp = appRow.dataset.app; renderAppPortfolio(); renderAppProfile(appRow.dataset.app); syncHash(); $("#appProfile").scrollIntoView({ block: "nearest" }); return; }
+    if (appRow) { PUSH_NEXT = true; state.mapApp = appRow.dataset.app; renderAppPortfolio(); renderAppProfile(appRow.dataset.app); syncUrl(); $("#appProfile").scrollIntoView({ block: "nearest" }); return; }
     const apfToList = e.target.closest("#apfToList");
     if (apfToList) { state.co = ""; drill("app", state.mapApp); return; }
     const partner = e.target.closest("#apfPartner .bar-row[data-partner]");
-    if (partner) { state.mapApp = partner.dataset.partner; renderAppPortfolio(); renderAppProfile(partner.dataset.partner); syncHash(); return; }
+    if (partner) { PUSH_NEXT = true; state.mapApp = partner.dataset.partner; renderAppPortfolio(); renderAppProfile(partner.dataset.partner); syncUrl(); return; }
     const apBar = e.target.closest("#appProfile .bar-row[data-facet]");
     if (apBar) { drillApp(apBar.dataset.facet, apBar.dataset.label); return; }
     const jointRow = e.target.closest("#jointApps .bar-row[data-joint]");
@@ -1982,21 +2085,9 @@
     else { APP_SORT.key = k; APP_SORT.desc = k !== "name"; }
     renderAppPortfolio();
   });
-  $("#coChip").addEventListener("click", () => { state.co = ""; render(); syncHash(); });
-  // H4：hash 外部变化（手改地址栏 / 前进后退 / 粘贴深链）
-  window.addEventListener("hashchange", () => {
-    applyHashToState(location.hash);
-    const m = /(?:^|&)p=([^&]*)/.exec((location.hash || "").replace(/^#/, ""));
-    const pn = m ? decodeURIComponent(m[1]) : "";
-    const found = pn && PATENTS.some((r) => r.PN === pn);
-    pendingDetailPn = (pn && !found && shardLoading) ? pn : "";  // 分片未就绪则暂存
-    detailPn = found ? pn : "";
-    syncFilterControls();
-    switchView(state.view);
-    render();
-    if (detailPn) showDetail(detailPn);
-    else $("#detailModal").classList.add("hidden");
-  });
+  $("#coChip").addEventListener("click", () => { PUSH_NEXT = true; state.co = ""; render(); });
+  // P4：前进/后退 → 按 URL 重建状态（内部不再 push）
+  window.addEventListener("popstate", () => { applyUrl(); });
 
   initTheme();
   initKwUnderline();
