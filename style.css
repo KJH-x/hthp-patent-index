@@ -18,6 +18,7 @@
   --tag-bg: #f3f4f6;
   --tag-ink: #374151;
   --track: #f3f4f6;
+  --row-alt: #fbfcfd;
   --code-bg: #fafbfc;
   --hl-bg: #fde68a;
   --hl-ink: #92400e;
@@ -54,6 +55,7 @@
   --tag-bg: #334155;
   --tag-ink: #cbd5e1;
   --track: #334155;
+  --row-alt: rgba(255, 255, 255, .035);
   --code-bg: #101b2e;
   --hl-bg: #78350f;
   --hl-ink: #fde68a;
@@ -85,6 +87,7 @@
     --tag-bg: #334155;
     --tag-ink: #cbd5e1;
     --track: #334155;
+    --row-alt: rgba(255, 255, 255, .035);
     --code-bg: #101b2e;
     --hl-bg: #78350f;
     --hl-ink: #fde68a;
@@ -153,14 +156,21 @@ body {
 /* 列表视图：flex 纵向布局，列表/卡片区域占满剩余高度、页内滚动不溢出页面 */
 #view-list.active {
   display: flex; flex-direction: column;
-  height: calc(100vh - var(--topbar-h)); min-height: 280px;
+  height: calc(100dvh - var(--topbar-h)); min-height: 280px;
 }
+/* 统计/地图视图：标题栏固定，内容区内部滚动 */
+#view-stats.active, #view-map.active {
+  display: flex; flex-direction: column;
+  height: calc(100dvh - var(--topbar-h)); min-height: 320px; overflow: hidden;
+}
+.view-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.charts, .chart-box { min-height: 0; }
 
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; flex-shrink: 0; }
 
 /* ---------- 表单控件统一皮肤（筛选 / 分页 / 地图） ---------- */
 .toolbar input, .toolbar select,
-.app-tools input[type="search"], .app-tools select,
+.app-tools input[type="search"],
 .pager select {
   appearance: none; -webkit-appearance: none;
   height: var(--ctl-h); padding: 0 12px;
@@ -176,12 +186,12 @@ body {
   background-repeat: no-repeat; background-position: right 10px center;
 }
 .toolbar input:hover, .toolbar select:hover,
-.app-tools input[type="search"]:hover, .app-tools select:hover,
+.app-tools input[type="search"]:hover,
 .pager select:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 .toolbar input:focus, .toolbar select:focus,
-.app-tools input[type="search"]:focus, .app-tools select:focus,
+.app-tools input[type="search"]:focus,
 .pager select:focus {
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
@@ -233,18 +243,23 @@ th { background: var(--th-bg); font-weight: 600; color: var(--th-ink); position:
 th.sortable:hover { background: var(--accent-soft); color: var(--accent); }
 th.sorted-asc::after { content: " ▲"; color: var(--accent); }
 th.sorted-desc::after { content: " ▼"; color: var(--accent); }
+th:not(.sortable) { cursor: default; }
+/* 斑马纹：位于 hover 规则之前；#patentTable 的行选择器带 id，需单独提高 hover 优先级 */
+#patentTable tbody tr:nth-child(even) { background: var(--row-alt); }
+.app-table tbody tr:nth-child(even) { background: var(--row-alt); }
 tbody tr:hover { background: var(--accent-soft); cursor: pointer; }
+#patentTable tbody tr:hover { background: var(--accent-soft); }
 td .pn { font-family: Consolas, monospace; font-weight: 600; color: var(--accent); white-space: nowrap; }
 td .dir-badge { display: inline-block; background: var(--accent-soft); color: var(--accent); border-radius: 20px; padding: 2px 10px; font-size: 12px; white-space: nowrap; }
 td .pdf-link { color: var(--accent); text-decoration: none; font-size: 13px; white-space: nowrap; }
 td .pdf-link:hover { text-decoration: underline; }
 /* 列宽：窄列固定不折行，宽列自适应 */
-.col-pn { width: 108px; }
+.col-pn { width: 136px; }
 .col-title { width: auto; }
 .col-ancs { width: 22%; }
 .col-pbd { width: 96px; white-space: nowrap; }
 .col-dir { width: 120px; }
-.col-pdf { width: 88px; white-space: nowrap; }
+.col-pdf { width: 104px; white-space: nowrap; }
 
 .pager { display: flex; align-items: center; gap: 14px; padding: 10px 14px; justify-content: flex-end; font-size: 13px; color: var(--muted); flex-shrink: 0; }
 .pager button { padding: 0 14px; height: var(--ctl-h); border: 1px solid var(--border); background: var(--card); color: var(--ink); border-radius: var(--ctl-radius); cursor: pointer; transition: border-color .15s, background-color .15s; }
@@ -313,34 +328,43 @@ u.kw-uline {
 }
 
 /* 自定义页内滚动条：窄条、圆角、默认隐藏，悬停/滚动时显示 */
-.table-wrap, .card-wrap, .modal-content, .claims-text {
+.table-wrap, .card-wrap, .modal-content, .claims-text,
+.view-scroll, .scrollbox, .chart.heat {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 .table-wrap:hover, .card-wrap:hover, .modal-content:hover, .claims-text:hover,
-.table-wrap.is-scroll, .card-wrap.is-scroll, .modal-content.is-scroll, .claims-text.is-scroll {
+.view-scroll:hover, .scrollbox:hover, .chart.heat:hover,
+.table-wrap.is-scroll, .card-wrap.is-scroll, .modal-content.is-scroll, .claims-text.is-scroll,
+.view-scroll.is-scroll, .scrollbox.is-scroll, .chart.heat.is-scroll {
   scrollbar-color: var(--scrollbar) transparent;
 }
 .table-wrap::-webkit-scrollbar, .card-wrap::-webkit-scrollbar,
-.modal-content::-webkit-scrollbar, .claims-text::-webkit-scrollbar {
+.modal-content::-webkit-scrollbar, .claims-text::-webkit-scrollbar,
+.view-scroll::-webkit-scrollbar, .scrollbox::-webkit-scrollbar, .chart.heat::-webkit-scrollbar {
   width: 7px; height: 7px;
 }
 .table-wrap::-webkit-scrollbar-track, .card-wrap::-webkit-scrollbar-track,
-.modal-content::-webkit-scrollbar-track, .claims-text::-webkit-scrollbar-track {
+.modal-content::-webkit-scrollbar-track, .claims-text::-webkit-scrollbar-track,
+.view-scroll::-webkit-scrollbar-track, .scrollbox::-webkit-scrollbar-track, .chart.heat::-webkit-scrollbar-track {
   background: transparent;
 }
 .table-wrap::-webkit-scrollbar-thumb, .card-wrap::-webkit-scrollbar-thumb,
-.modal-content::-webkit-scrollbar-thumb, .claims-text::-webkit-scrollbar-thumb {
+.modal-content::-webkit-scrollbar-thumb, .claims-text::-webkit-scrollbar-thumb,
+.view-scroll::-webkit-scrollbar-thumb, .scrollbox::-webkit-scrollbar-thumb, .chart.heat::-webkit-scrollbar-thumb {
   background: transparent; border-radius: 4px;
 }
 .table-wrap:hover::-webkit-scrollbar-thumb, .card-wrap:hover::-webkit-scrollbar-thumb,
 .modal-content:hover::-webkit-scrollbar-thumb, .claims-text:hover::-webkit-scrollbar-thumb,
+.view-scroll:hover::-webkit-scrollbar-thumb, .scrollbox:hover::-webkit-scrollbar-thumb, .chart.heat:hover::-webkit-scrollbar-thumb,
 .table-wrap.is-scroll::-webkit-scrollbar-thumb, .card-wrap.is-scroll::-webkit-scrollbar-thumb,
-.modal-content.is-scroll::-webkit-scrollbar-thumb, .claims-text.is-scroll::-webkit-scrollbar-thumb {
+.modal-content.is-scroll::-webkit-scrollbar-thumb, .claims-text.is-scroll::-webkit-scrollbar-thumb,
+.view-scroll.is-scroll::-webkit-scrollbar-thumb, .scrollbox.is-scroll::-webkit-scrollbar-thumb, .chart.heat.is-scroll::-webkit-scrollbar-thumb {
   background: var(--scrollbar);
 }
 .table-wrap::-webkit-scrollbar-thumb:hover, .card-wrap::-webkit-scrollbar-thumb:hover,
-.modal-content::-webkit-scrollbar-thumb:hover, .claims-text::-webkit-scrollbar-thumb:hover {
+.modal-content::-webkit-scrollbar-thumb:hover, .claims-text::-webkit-scrollbar-thumb:hover,
+.view-scroll::-webkit-scrollbar-thumb:hover, .scrollbox::-webkit-scrollbar-thumb:hover, .chart.heat::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
 }
 
@@ -361,11 +385,6 @@ u.kw-uline {
 .chart .bar-track { flex: 1; background: var(--track); border-radius: 4px; height: 18px; overflow: hidden; }
 .chart .bar { height: 100%; background: linear-gradient(90deg, var(--accent), #60a5fa); border-radius: 4px; }
 .chart .bar-val { width: 60px; font-size: 12px; color: var(--muted); }
-
-.about { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; max-width: 900px; }
-.about h2 { margin-bottom: 12px; }
-.about p { margin-bottom: 10px; color: var(--label); }
-.about code { background: var(--tag-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
 
 @media (max-width: 720px) {
   :root { --topbar-h: 188px; }
@@ -569,20 +588,24 @@ u.kw-uline {
   background-repeat: no-repeat; background-position: 12px center;
 }
 .scrollbox { max-height: 460px; overflow: auto; }
-.app-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.app-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
 .app-table th, .app-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.app-table th:first-child, .app-table td:first-child { width: 34%; min-width: 220px; }
+.app-table th.num, .app-table td.num-col { width: 1%; white-space: nowrap; }
+.app-table th.num { text-align: right; }
 .app-table th { background: var(--th-bg); color: var(--th-ink); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
 .app-table th.sortable { cursor: pointer; user-select: none; }
 .app-table th.sortable:hover { background: var(--accent-soft); color: var(--accent); }
 .app-table tbody tr { cursor: pointer; }
 .app-table tbody tr:hover { background: var(--accent-soft); }
-.app-table tbody tr.active { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.app-table tbody tr.active { background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
 .app-table .app-name { max-width: 320px; }
 .app-table .num-col { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; position: relative; }
 .app-table .num-col .pct { color: var(--muted); font-size: 11px; margin-left: 4px; }
+.app-table .num-val { position: relative; z-index: 1; }
 .app-table .mini-bar {
-  position: absolute; left: 6px; top: 50%; height: 6px; transform: translateY(-50%);
-  background: color-mix(in srgb, var(--accent) 26%, transparent); border-radius: 3px; z-index: 0;
+  position: absolute; right: 6px; top: 50%; height: 6px; transform: translateY(-50%);
+  background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 3px;
 }
 .app-table .empty-cell { text-align: center; color: var(--muted); padding: 20px; }
 .app-tag {
@@ -607,9 +630,10 @@ u.kw-uline {
 .tier-chip.tier-4 { color: var(--muted); border-color: color-mix(in srgb, var(--muted) 26%, transparent); }
 .mini-list { list-style: none; margin: 0; padding: 0; }
 .mini-list li {
-  padding: 5px 2px; border-bottom: 1px dashed var(--border); font-size: 13px; cursor: pointer;
+  padding: 5px 6px; border-bottom: 1px dashed var(--border); font-size: 13px; cursor: pointer;
   display: flex; align-items: center; gap: 6px;
 }
+.mini-list li:nth-child(even) { background: var(--row-alt); }
 .mini-list li:hover { color: var(--accent); }
 .mini-list .pn { font-family: Consolas, monospace; font-weight: 600; color: var(--accent); }
 .mini-list .mini-year { color: var(--muted); font-size: 12px; }

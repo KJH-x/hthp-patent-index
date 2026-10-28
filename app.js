@@ -77,7 +77,7 @@
     familyMode: "all",   // H2："all" | "dedup"
     favOnly: false,      // H4：只看收藏
     mapApp: "",          // H12：专利地图中选中的申请人（布局详情）
-    co: ""               // H12：联合申请组合筛选（\u0001 分隔的申请人列表）
+    co: ""               // H12：联合申请组合筛选（| 分隔的申请人列表）
   };
 
   const $ = (s) => document.querySelector(s);
@@ -472,42 +472,44 @@
   }
 
   function populateFilters() {
-    const dirs = new Set(), years = new Set(), apps = new Set();
-    const ipcs = new Set(), legals = new Set(), countries = new Set();
+    // 单趟扫描同时累计各筛选项计数（IPC/申请人按件去重）
+    const dirCounts = {}, yearCounts = {}, appCounts = {}, ipcCounts = {};
+    const legalCounts = {}, countryCounts = {}, tierCounts = { 1: 0, 2: 0, 3: 0, 4: 0 }, relCounts = {};
+    const bump = (m, k) => { m[k] = (m[k] || 0) + 1; };
     PATENTS.forEach((r) => {
-      if (r.Direction) dirs.add(r.Direction);
-      if (r.PBD) years.add(r.PBD.slice(0, 4));
-      (r.ANCS || []).forEach((a) => apps.add(a));
-      (r.IPCR || []).forEach((x) => ipcs.add(ipcMainGroup(x)));
-      legals.add(legalBucketOf(r.LEGAL || []));
-      if (r.COUNTRY) countries.add(r.COUNTRY);
+      if (r.Direction) bump(dirCounts, r.Direction);
+      if (r.PBD) bump(yearCounts, r.PBD.slice(0, 4));
+      [...new Set(r.ANCS || [])].forEach((a) => bump(appCounts, a));
+      [...new Set((r.IPCR || []).map(ipcMainGroup))].forEach((x) => bump(ipcCounts, x));
+      bump(legalCounts, legalBucketOf(r.LEGAL || []));
+      if (r.COUNTRY) bump(countryCounts, r.COUNTRY);
+      bump(tierCounts, r.Q || 4);
+      bump(relCounts, String(r.REL ?? -1));
     });
+    // 计数降序；last 指定的标签强制排最后
+    const byCount = (m, last) => Object.entries(m)
+      .sort((a, b) => (a[0] === last) - (b[0] === last) || b[1] - a[1] || a[0].localeCompare(b[0], "zh"));
+    const opts = (entries) =>
+      entries.map(([k, n]) => `<option value="${esc(k)}">${esc(k)}（${n}）</option>`).join("");
     $("#dirFilter").innerHTML =
-      '<option value="">全部方向</option>' +
-      [...dirs].sort().map((d) => `<option>${esc(d)}</option>`).join("");
+      '<option value="">全部方向</option>' + opts(byCount(dirCounts, "其他"));
     $("#yearFilter").innerHTML =
       '<option value="">全部年份</option>' +
-      [...years].sort().reverse().map((y) => `<option>${esc(y)}</option>`).join("");
+      Object.keys(yearCounts).sort().reverse().map((y) => `<option value="${esc(y)}">${esc(y)}（${yearCounts[y]}）</option>`).join("");
     $("#appFilter").innerHTML =
-      '<option value="">全部申请人</option>' +
-      [...apps].sort().map((a) => `<option>${esc(a)}</option>`).join("");
+      '<option value="">全部申请人</option>' + opts(byCount(appCounts));
     $("#ipcFilter").innerHTML =
-      '<option value="">全部IPC</option>' +
-      [...ipcs].sort().map((x) => `<option>${esc(x)}</option>`).join("");
+      '<option value="">全部IPC</option>' + opts(byCount(ipcCounts, "其他"));
     $("#legalFilter").innerHTML =
       '<option value="">全部法律状态</option>' +
-      [...legals].sort((a, b) => a.localeCompare(b, "zh")).map((x) => `<option>${esc(x)}</option>`).join("");
+      ["授权有效", "审中", "终止/失效", "其他"].filter((x) => legalCounts[x])
+        .map((x) => `<option value="${esc(x)}">${esc(x)}（${legalCounts[x]}）</option>`).join("");
     $("#countryFilter").innerHTML =
-      '<option value="">全部国家</option>' +
-      [...countries].sort().map((c) => `<option>${esc(c)}</option>`).join("");
-    const tierCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    PATENTS.forEach((r) => { tierCounts[r.Q || 4]++; });
+      '<option value="">全部国家</option>' + opts(byCount(countryCounts));
     $("#tierFilter").innerHTML =
       '<option value="">全部分级</option>' +
       [1, 2, 3, 4].map((t) => `<option value="${t}">${TIER_LABEL[t] || "白"}框（${tierCounts[t]}）</option>`).join("");
     const REL_LABELS = [["3", "核心"], ["2", "相关"], ["1", "边缘"], ["0", "无关"], ["-1", "未判定"]];
-    const relCounts = {};
-    PATENTS.forEach((r) => { const k = String(r.REL ?? -1); relCounts[k] = (relCounts[k] || 0) + 1; });
     $("#relFilter").innerHTML =
       '<option value="">全部关联</option>' +
       REL_LABELS.filter(([k]) => relCounts[k]).map(([k, lab]) => `<option value="${k}">${lab}（${relCounts[k]}）</option>`).join("");
@@ -521,7 +523,7 @@
       if (state.dir && r.Direction !== state.dir) return false;
       if (state.year && r.PBD.slice(0, 4) !== state.year) return false;
       if (state.app && !(r.ANCS || []).includes(state.app)) return false;
-      if (state.co && !state.co.split("\u0001").every((a) => (r.ANCS || []).includes(a))) return false;
+      if (state.co && !state.co.split("|").every((a) => (r.ANCS || []).includes(a))) return false;
       if (state.ipc &&
         !(r.IPCR || []).some((x) => ipcMainGroup(x) === state.ipc) &&
         !(r.CPC || []).some((x) => ipcMainGroup(x) === state.ipc)) return false;
@@ -621,7 +623,7 @@
 
     const coChip = $("#coChip");
     if (state.co) {
-      const names = state.co.split("\u0001");
+      const names = state.co.split("|");
       coChip.textContent = `联合：${names.join(" ＋ ")} ✕`;
       coChip.classList.remove("hidden");
     } else {
@@ -754,7 +756,7 @@
       const arr = [...found];
       for (let i = 0; i < arr.length; i++) {
         for (let j = i + 1; j < arr.length; j++) {
-          const k = arr[i] < arr[j] ? arr[i] + "\u0001" + arr[j] : arr[j] + "\u0001" + arr[i];
+          const k = arr[i] < arr[j] ? arr[i] + "|" + arr[j] : arr[j] + "|" + arr[i];
           cooc[k] = (cooc[k] || 0) + 1;
         }
       }
@@ -779,7 +781,7 @@
     const nameSet = new Set(nodes.map((n) => n.name));
     const links = [];
     for (const [k, w] of Object.entries(cooc)) {
-      const [a, b] = k.split("\u0001");
+      const [a, b] = k.split("|");
       if (nameSet.has(a) && nameSet.has(b)) links.push({ a, b, weight: w });
     }
     links.sort((x, y) => y.weight - x.weight);
@@ -795,7 +797,7 @@
         for (let j = i + 1; j < ancs.length; j++) {
           const a = ancs[i] < ancs[j] ? ancs[i] : ancs[j];
           const b = ancs[i] < ancs[j] ? ancs[j] : ancs[i];
-          const k = a + "\u0001" + b;
+          const k = a + "|" + b;
           cooc[k] = (cooc[k] || 0) + 1;
         }
       }
@@ -805,7 +807,7 @@
     const nameSet = new Set(nodes.map((n) => n.name));
     const links = [];
     for (const [k, w] of Object.entries(cooc)) {
-      const [a, b] = k.split("\u0001");
+      const [a, b] = k.split("|");
       if (nameSet.has(a) && nameSet.has(b)) links.push({ a, b, weight: w });
     }
     links.sort((x, y) => y.weight - x.weight);
@@ -908,13 +910,13 @@
     const top = arr.slice(0, 60);
     const max = Math.max(...top.map((o) => o.m.count), 1);
     const th = (key, label, cls) =>
-      `<th class="sortable${cls ? " " + cls : ""}" data-key="${key}" title="点击排序">${label}${APP_SORT.key === key ? (APP_SORT.desc ? " ▼" : " ▲") : ""}</th>`;
+      `<th class="sortable${key !== "name" ? " num" : ""}${cls ? " " + cls : ""}" data-key="${key}" title="点击排序">${label}${APP_SORT.key === key ? (APP_SORT.desc ? " ▼" : " ▲") : ""}</th>`;
     const rows = top.map((o) => {
       const m = o.m;
       const extra = m.tier12 ? `<span class="app-tag">彩${o.tiers[1]}·金${o.tiers[2]}</span>` : "";
       return `<tr data-app="${esc(o.name)}"${o.name === state.mapApp ? ' class="active"' : ""} title="点击查看「${esc(o.name)}」布局详情">
         <td class="app-name">${esc(o.name)}${extra}</td>
-        <td class="num-col"><span class="mini-bar" style="width:${Math.round((m.count / max) * 100)}%"></span>${m.count}</td>
+        <td class="num-col"><span class="mini-bar" style="width:${Math.round((m.count / max) * 100)}%"></span><span class="num-val">${m.count}</span></td>
         <td class="num-col">${m.joint}<span class="pct"> · ${m.jointPct}%</span></td>
         <td class="num-col">${m.dirsN}</td>
         <td class="num-col">${m.ipcsN}</td>
@@ -1010,7 +1012,7 @@
       const ancs = [...new Set(r.ANCS || [])];
       if (ancs.length < 2) continue;
       const names = ancs.slice().sort();
-      const key = names.join("\u0001");
+      const key = names.join("|");
       let o = m.get(key);
       if (!o) { o = { names, count: 0, minY: "", maxY: "" }; m.set(key, o); }
       o.count++;
@@ -1027,7 +1029,7 @@
     const max = arr.length ? arr[0].count : 1;
     $("#jointApps").innerHTML = arr.map((o) => {
       const label = o.names.join(" ＋ ");
-      return `<div class="bar-row clickable" data-joint="${esc(o.names.join("\u0001"))}" role="button" tabindex="0" title="${esc(label)}：${o.count} 件（${o.minY}–${o.maxY}），点击在列表中筛出共同申请">
+      return `<div class="bar-row clickable" data-joint="${esc(o.names.join("|"))}" role="button" tabindex="0" title="${esc(label)}：${o.count} 件（${o.minY}–${o.maxY}），点击在列表中筛出共同申请">
         <div class="bar-label" title="${esc(label)}">${esc(label)}</div>
         <div class="bar-track"><div class="bar" style="width:${(o.count / max) * 100}%"></div></div>
         <div class="bar-val">${o.count}</div></div>`;
@@ -1084,11 +1086,6 @@
     $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
     if (view === "stats") renderStats();
     if (view === "map") renderMap();
-    if (view === "about") {
-      $("#aboutText").textContent =
-        `本库为高温热泵专利技术情报调查的结构化成果，包含 ${STATS.total} 件专利的结构化记录（书目、摘要、AI技术问题/方法/功效、IPC分类、法律状态、专利族）。` +
-        ` 官方PDF原文仅在内网提供下载（公网不发布 PDF）。数据采集自智慧芽专利平台；抽样说明：本库为便利样本（偏最新公开、偏头部申请人），相对核心窄集“超高温热泵”(271条)覆盖约47%，相对宽泛“高温热泵”(4520条)约2.8%，不作为全领域统计推断。`;
-    }
     syncHash();
   }
   // 统计/地图下钻：写入 state → 切列表 → 回填筛选控件 → render → 滚到列表
@@ -1147,6 +1144,8 @@
     setSel("#countryFilter", state.country);
     setSel("#tierFilter", state.tier);
     setSel("#relFilter", state.rel);
+    const ps = $("#pageSize");
+    if (ps) ps.value = state.pageSize === "all" ? "all" : String(state.pageSize);
   }
 
   // hash 字段：q/y/d/a/i/l/c/s/o/ps/pg/v/p
@@ -1187,7 +1186,6 @@
     state.rel = qs.get("rr") || "";
     state.mapApp = qs.get("ma") || "";
     state.co = qs.get("co") || "";
-    state.tier = qs.get("t") || "";
     const s = qs.get("s");
     state.sortKey = s && ["PN", "TITLE", "ANCS", "PBD", "Direction"].includes(s) ? s : "PBD";
     state.sortDesc = qs.get("o") !== "asc";
@@ -1195,7 +1193,7 @@
     state.pageSize = ps === "all" ? "all" : (ps && +ps > 0 ? +ps : 100);
     state.page = Math.max(1, +qs.get("pg") || 1);
     const v = qs.get("v");
-    state.view = (v === "stats" || v === "about" || v === "map") ? v : "list";
+    state.view = (v === "stats" || v === "map") ? v : "list";
   }
   function syncHash() {
     const next = "#" + stateToHash();
@@ -1393,13 +1391,24 @@
 
   // ---------- 自动隐藏滚动条 ----------
   function wireAutoScrollbar() {
-    $$(".table-wrap, .card-wrap, .modal-content, .claims-text").forEach((el) => {
+    $$(".table-wrap, .card-wrap, .modal-content, .claims-text, .view-scroll, .scrollbox, .chart.heat").forEach((el) => {
       el.addEventListener("scroll", () => {
         el.classList.add("is-scroll");
         clearTimeout(el._scrollT);
         el._scrollT = setTimeout(() => el.classList.remove("is-scroll"), 500);
       });
     });
+  }
+
+  // ---------- 顶栏高度同步（列表/统计/地图视图按剩余高度布局） ----------
+  function initTopbarHeight() {
+    const bar = document.querySelector("header.topbar");
+    if (!bar) return;
+    const apply = () => {
+      document.documentElement.style.setProperty("--topbar-h", Math.ceil(bar.getBoundingClientRect().height) + "px");
+    };
+    apply();
+    if (window.ResizeObserver) new ResizeObserver(apply).observe(bar);
   }
 
   // events
@@ -1589,6 +1598,7 @@
   initTheme();
   initKwUnderline();
   wireAutoScrollbar();
+  initTopbarHeight();
   loadFavs();
   load();
 })();

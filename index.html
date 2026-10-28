@@ -22,7 +22,6 @@
         <button class="tab active" data-view="list">专利列表</button>
         <button class="tab" data-view="stats">统计分析</button>
         <button class="tab" data-view="map">专利地图</button>
-        <button class="tab" data-view="about">说明</button>
       </nav>
       <div class="switch-area">
         <div class="view-toggle" id="viewToggle">
@@ -102,6 +101,7 @@
 
   <!-- 统计视图 -->
   <section id="view-stats" class="view">
+    <div class="view-scroll">
     <div class="stat-cards" id="statCards"></div>
     <div class="charts">
       <div class="chart-box"><h3>公开年份分布</h3><div id="chartYear" class="chart"></div></div>
@@ -111,10 +111,12 @@
       <div class="chart-box"><h3>法律状态分布</h3><div id="chartLegal" class="chart"></div></div>
       <div class="chart-box full"><h3>申请年 × 方向（近6年 × TOP8）</h3><div id="chartAppYearDir" class="chart heat"></div></div>
     </div>
+    </div>
   </section>
 
   <!-- 专利地图视图 -->
   <section id="view-map" class="view">
+    <div class="view-scroll">
     <div class="charts">
       <div class="chart-box full"><h3>关键词词云（标题+摘要，KW_DICT 206 词）</h3><div id="kwCloud" class="chart cloud"></div></div>
       <div class="chart-box full"><h3>关键词共现网络（TOP25，点击节点搜索该关键词）</h3><div id="kwNet" class="chart net"></div></div>
@@ -145,13 +147,6 @@
         <div id="jointApps" class="chart"></div>
       </div>
     </div>
-  </section>
-
-  <!-- 说明视图 -->
-  <section id="view-about" class="view">
-    <div class="about">
-      <h2>关于本库</h2>
-      <p id="aboutText"></p>
     </div>
   </section>
 
