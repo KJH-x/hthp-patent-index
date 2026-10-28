@@ -659,3 +659,154 @@ u.kw-uline {
 #appDirHeat .app-hcell:hover { outline: 2px solid var(--accent); }
 #jointApps .bar-label { width: 320px; max-width: 42vw; }
 #appDirHeat .hm-dir { width: 170px; }
+
+/* ========== P3 自定义下拉（listbox，零依赖） ========== */
+.dd { position: relative; display: inline-flex; min-width: 0; }
+.dd-native { display: none !important; }
+.dd-btn {
+  appearance: none; -webkit-appearance: none;
+  height: var(--ctl-h); padding: 0 10px 0 12px; gap: 6px;
+  display: inline-flex; align-items: center;
+  min-width: 0; max-width: 240px;
+  border: 1px solid var(--border); border-radius: var(--ctl-radius);
+  background: var(--card); color: var(--ink);
+  font-family: inherit; font-size: 14px; line-height: 1.2;
+  box-shadow: var(--ctl-shadow); cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+.dd-btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.dd-btn:focus-visible,
+.dd-btn[aria-expanded="true"] {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.dd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dd-arrow {
+  flex: 0 0 auto; width: 12px; height: 12px;
+  background: var(--ctl-arrow) center / contain no-repeat;
+  opacity: .9; transition: transform .15s;
+}
+.dd-btn[aria-expanded="true"] .dd-arrow { transform: rotate(180deg); }
+.dd-app { flex: 0 1 230px; }
+.dd-app .dd-btn { width: 100%; max-width: 230px; }
+.dd-page .dd-btn { min-width: 84px; }
+.pager label { display: inline-flex; align-items: center; gap: 6px; }
+
+.dd-pop {
+  position: fixed; z-index: 70;
+  display: flex; flex-direction: column;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow-lg); padding: 6px;
+  overflow: hidden; max-height: 60vh;
+}
+.dd-pop[hidden] { display: none; }
+
+.dd-search {
+  flex: 0 0 auto; padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--border); margin-bottom: 4px;
+}
+.dd-search[hidden] { display: none; }
+.dd-search input {
+  appearance: none; -webkit-appearance: none;
+  width: 100%; height: 32px; padding: 0 10px 0 32px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background-color: var(--card); color: var(--ink);
+  font-family: inherit; font-size: 13px; box-shadow: var(--ctl-shadow);
+  background-image: var(--ctl-search);
+  background-repeat: no-repeat; background-position: 10px center;
+}
+.dd-search input:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.dd-search input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.dd-list {
+  flex: 1 1 auto; min-height: 0; overflow: auto;
+  max-height: 46vh; padding: 2px;
+  scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent;
+}
+.dd-list::-webkit-scrollbar { width: 7px; height: 7px; }
+.dd-list::-webkit-scrollbar-track { background: transparent; }
+.dd-list::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+.dd-list::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+
+.dd-item {
+  display: flex; gap: 8px; align-items: center;
+  width: 100%; padding: 7px 10px; border: none; border-radius: 8px;
+  background: none; color: var(--ink);
+  font-family: inherit; font-size: 13px; text-align: left;
+  cursor: pointer;
+}
+.dd-item:hover, .dd-item.hl { background: var(--accent-soft); }
+.dd-item[aria-selected="true"] {
+  background: var(--accent-soft); color: var(--accent); font-weight: 600;
+}
+.dd-opt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-check {
+  flex: 0 0 auto; width: 14px; text-align: center;
+  color: var(--accent); font-size: 12px; font-weight: 700;
+}
+.dd-count {
+  color: var(--muted); margin-left: auto;
+  font-variant-numeric: tabular-nums; font-weight: 400;
+}
+
+.dd-selected {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 6px 4px 8px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto; max-height: 30vh; overflow-y: auto;
+  scrollbar-width: thin;
+}
+.dd-selected[hidden] { display: none; }
+.dd-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 2px 3px 2px 8px; max-width: 100%;
+  border-radius: 12px; font-size: 12px;
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  white-space: nowrap; overflow: hidden;
+}
+.dd-chip-x {
+  border: none; background: none; color: inherit; cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 2px 5px; border-radius: 50%;
+}
+.dd-chip-x:hover { background: var(--accent); color: #fff; }
+.dd-clear {
+  border: 1px dashed var(--border); background: none; color: var(--muted);
+  border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: pointer;
+}
+.dd-clear:hover { color: var(--accent); border-color: var(--accent); }
+
+.dd-foot {
+  flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 6px 4px 2px; margin-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+}
+.dd-foot[hidden] { display: none; }
+.dd-hint { color: var(--muted); }
+.dd-act {
+  border: 1px solid var(--border); background: var(--card); color: var(--accent);
+  border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  margin-left: auto;
+}
+.dd-act:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+.dd-act:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ≤720px：底部抽屉式列表 */
+@media (max-width: 720px) {
+  .dd-pop {
+    left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important;
+    width: 100% !important; max-height: 65vh !important;
+    border-radius: 14px 14px 0 0 !important;
+    border-left: none; border-right: none; border-bottom: none;
+    padding-bottom: 10px;
+  }
+  .dd-list { max-height: 48vh; }
+  .dd-btn { max-width: 100%; }
+  .dd-app { flex: 1 1 auto; }
+  .dd-app .dd-btn { max-width: 100%; }
+}

@@ -61,7 +61,8 @@
     q: "",
     dir: "",
     year: "",
-    app: "",
+    app: "",          // 兼容旧字段，已不使用（申请人改为 state.apps 多选）
+    apps: [],         // P3：申请人多选（任一命中；ANCS 的 OR 语义）
     ipc: "",          // H3/H6：IPC 主组筛选（下钻目标）
     legal: "",        // H3：法律四桶筛选（下钻目标）
     country: "",      // H11：地域筛选（下钻目标）
@@ -513,6 +514,7 @@
     $("#relFilter").innerHTML =
       '<option value="">全部关联</option>' +
       REL_LABELS.filter(([k]) => relCounts[k]).map(([k, lab]) => `<option value="${k}">${lab}（${relCounts[k]}）</option>`).join("");
+    syncDropdowns();
   }
 
   function filtered() {
@@ -522,7 +524,8 @@
       if (state.familyMode === "dedup" && !isMainRecord(r)) return false;
       if (state.dir && r.Direction !== state.dir) return false;
       if (state.year && r.PBD.slice(0, 4) !== state.year) return false;
-      if (state.app && !(r.ANCS || []).includes(state.app)) return false;
+      if (state.apps && state.apps.length &&
+        !state.apps.some((a) => (r.ANCS || []).includes(a))) return false;
       if (state.co && !state.co.split("|").every((a) => (r.ANCS || []).includes(a))) return false;
       if (state.ipc &&
         !(r.IPCR || []).some((x) => ipcMainGroup(x) === state.ipc) &&
@@ -871,6 +874,16 @@
       }
     }
     for (const o of m.values()) {
+      // P3：严格拼音索引（逐字拼音，仅保留纯小写字母音节；非中文字符丢弃）
+      o.chars = [...o.name];
+      o.toks = toPinyinIndex(o.name).map((s) => String(s).toLowerCase());
+      o.syl = o.toks.filter((s) => /^[a-z]+$/.test(s));
+      o.py = o.syl.join("");
+      o.ini = o.syl.map((s) => s[0]).join("");
+      o.bnd = new Set();
+      let pyOff = 0;
+      o.syl.forEach((s) => { o.bnd.add(pyOff); pyOff += s.length; });
+      o.bnd.add(o.py.length);
       o.m = {
         name: o.name, count: o.count, joint: o.joint,
         jointPct: o.count ? Math.round((o.joint / o.count) * 100) : 0,
@@ -889,6 +902,64 @@
     APP_INDEX = m;
     APP_INDEX_N = PATENTS.length;
     return m;
+  }
+
+  // P3：拼音全拼边界匹配 —— 命中必须起止都落在音节边界上（禁止 geli 命中 ge|ling）
+  function pyHasBoundary(o, q) {
+    if (!q) return true;
+    let i = o.py.indexOf(q);
+    while (i >= 0) {
+      if (o.bnd.has(i) && o.bnd.has(i + q.length)) return true;
+      i = o.py.indexOf(q, i + 1);
+    }
+    return false;
+  }
+  // 中英混合：逐字对齐，中文必须同字，拉丁串必须整音节匹配（结束在音节边界）
+  function mixedAppMatch(o, n) {
+    let ti = 0, qi = 0;
+    while (qi < n.length) {
+      if (ti >= o.toks.length) return false;
+      if (/[a-z]/.test(n[qi])) {
+        let j = qi;
+        while (j < n.length && /[a-z]/.test(n[j])) j++;
+        let run = n.slice(qi, j);
+        while (run.length) {
+          const s = o.toks[ti];
+          if (!s || !/^[a-z]+$/.test(s) || !run.startsWith(s)) return false;
+          run = run.slice(s.length);
+          ti++;
+        }
+        qi = j;
+      } else {
+        if (o.chars[ti] !== n[qi]) return false;
+        ti++; qi++;
+      }
+    }
+    return true;
+  }
+  // P3：申请人严格匹配（无模糊）。排序：精确名 > 名前缀 > 名包含 > 首字母 > 全拼；同档按件数降序
+  function matchApplicants(q) {
+    const all = [...appIndexOf().values()];
+    const n = String(q == null ? "" : q).toLowerCase().replace(/\s+/g, "");
+    if (!n) {
+      return all.sort((a, b) => b.count - a.count || String(a.name).localeCompare(String(b.name), "zh"));
+    }
+    const hasCJK = /[\u4e00-\u9fa5]/.test(n);
+    const hasLatin = /[a-z]/.test(n);
+    let hits;
+    if (hasCJK && !hasLatin) hits = all.filter((o) => o.name.includes(n));
+    else if (!hasCJK) hits = all.filter((o) => o.ini.includes(n) || pyHasBoundary(o, n));
+    else hits = all.filter((o) => mixedAppMatch(o, n));
+    const rankOf = (o) => {
+      if (o.name === n) return 0;
+      if (o.name.startsWith(n)) return 1;
+      if (o.name.includes(n)) return 2;
+      if (o.ini.includes(n)) return 3;
+      return 4;
+    };
+    hits.sort((a, b) => rankOf(a) - rankOf(b) ||
+      b.count - a.count || String(a.name).localeCompare(String(b.name), "zh"));
+    return hits;
   }
 
   function appSortedList() {
@@ -1094,7 +1165,7 @@
     switch (facet) {
       case "year": state.year = value; break;
       case "dir": state.dir = value; break;
-      case "app": state.app = value; break;
+      case "app": state.apps = value ? [value] : []; break;
       case "ipc": state.ipc = value; break;
       case "legal": state.legal = value; break;
       case "country": state.country = value; break;
@@ -1116,14 +1187,15 @@
       if (wrap) wrap.scrollTop = 0;
     });
   }
-  // H12：在以某申请人为前提的下钻（保留 state.app）
+  // H12：在以某申请人为前提的下钻（保留申请人筛选）
   function drillApp(facet, value) {
-    if (state.mapApp) state.app = state.mapApp;
+    if (state.mapApp) state.apps = [state.mapApp];
     drill(facet, value);
   }
   // H12：按联合申请组合筛出共同申请的专利
   function drillCo() {
     state.app = "";
+    state.apps = [];
     state.page = 1;
     switchView("list");
     syncFilterControls();
@@ -1140,7 +1212,11 @@
     };
     setSel("#dirFilter", state.dir);
     setSel("#yearFilter", state.year);
-    setSel("#appFilter", state.app);
+    const appSel = $("#appFilter");
+    if (appSel) {
+      const first = (state.apps && state.apps[0]) || "";
+      appSel.value = [...appSel.options].some((o) => o.value === first) ? first : "";
+    }
     setSel("#ipcFilter", state.ipc);
     setSel("#legalFilter", state.legal);
     setSel("#countryFilter", state.country);
@@ -1152,13 +1228,294 @@
     if (fam) fam.checked = state.familyMode === "dedup";
     const fav = $("#favToggle");
     if (fav) fav.checked = !!state.favOnly;
+    syncDropdowns();
+  }
+
+  // ---------- P3 自定义下拉（原生 select 作为隐藏状态载体） ----------
+  const DROPDOWNS = [];
+  const DD_IDS = ["dirFilter", "yearFilter", "appFilter", "ipcFilter", "legalFilter",
+    "countryFilter", "tierFilter", "relFilter", "pageSize"];
+
+  function optParts(text) {
+    const m = /^(.*?)（(\d+)）$/.exec(String(text || ""));
+    return m ? { label: m[1], count: m[2] } : { label: String(text || ""), count: "" };
+  }
+
+  function initDropdowns() {
+    DD_IDS.forEach((id) => {
+      const sel = document.getElementById(id);
+      if (!sel || sel.dataset.dd === id) return;
+      sel.dataset.dd = id;
+      const dd = document.createElement("div");
+      dd.className = "dd" + (id === "appFilter" ? " dd-app" : "") + (id === "pageSize" ? " dd-page" : "");
+      sel.parentNode.insertBefore(dd, sel);
+      dd.appendChild(sel);
+      sel.classList.add("dd-native");
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "dd-btn";
+      btn.setAttribute("aria-haspopup", "listbox");
+      btn.setAttribute("aria-expanded", "false");
+      btn.innerHTML = '<span class="dd-label"></span><span class="dd-arrow"></span>';
+
+      const pop = document.createElement("div");
+      pop.className = "dd-pop";
+      pop.setAttribute("role", "listbox");
+      pop.hidden = true;
+      pop.innerHTML = '<div class="dd-search"><input type="search" placeholder="搜索选项…" aria-label="搜索选项"></div>'
+        + (id === "appFilter" ? '<div class="dd-selected" hidden></div>' : "")
+        + '<div class="dd-list"></div><div class="dd-foot" hidden></div>';
+
+      dd.appendChild(btn);
+      dd.appendChild(pop);
+
+      const d = {
+        id, sel, dd, btn, pop, isOpen: false, hl: -1, items: [], query: "", matched: 0,
+        multi: id === "appFilter",
+        label: btn.querySelector(".dd-label"),
+        search: pop.querySelector(".dd-search"),
+        searchInput: pop.querySelector(".dd-search input"),
+        selected: pop.querySelector(".dd-selected"),
+        list: pop.querySelector(".dd-list"),
+        foot: pop.querySelector(".dd-foot")
+      };
+      DROPDOWNS.push(d);
+      wireDropdown(d);
+    });
+  }
+
+  function wireDropdown(d) {
+    d.btn.addEventListener("click", () => {
+      if (d.isOpen) closeDropdown(d); else openDropdown(d);
+    });
+    d.searchInput.addEventListener("input", () => {
+      d.query = d.searchInput.value.trim();
+      fillList(d);
+    });
+    d.pop.addEventListener("click", (e) => {
+      const x = e.target.closest(".dd-chip-x");
+      if (x) {
+        const chip = x.closest(".dd-chip");
+        if (chip) { state.apps = (state.apps || []).filter((a) => a !== chip.dataset.v); applyApps(); }
+        return;
+      }
+      const act = e.target.closest("[data-act]");
+      if (act) {
+        const kind = act.dataset.act;
+        if (kind === "clear") { state.apps = []; applyApps(); }
+        else if (kind === "all") {
+          const names = matchApplicants(d.query).map((o) => o.name).slice(0, 200);
+          if (names.length) { state.apps = [...new Set(names)]; applyApps(); }
+        }
+        return;
+      }
+      const item = e.target.closest(".dd-item");
+      if (!item) return;
+      if (d.multi) toggleApp(item.dataset.v);
+      else pickSingle(d, item.dataset.v);
+    });
+    d.dd.addEventListener("keydown", (e) => {
+      if (d.isOpen) {
+        if (e.key === "Escape") {
+          e.preventDefault(); e.stopPropagation(); closeDropdown(d); d.btn.focus();
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault(); e.stopPropagation(); stepHl(d, 1);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault(); e.stopPropagation(); stepHl(d, -1);
+        } else if (e.key === "Home") {
+          e.preventDefault(); setHl(d, 0);
+        } else if (e.key === "End") {
+          e.preventDefault(); setHl(d, d.items.length - 1);
+        } else if (e.key === "Enter") {
+          e.preventDefault(); e.stopPropagation(); activateHl(d);
+        } else if (e.key === "Tab") {
+          closeDropdown(d);
+        }
+      } else if (e.target === d.btn &&
+        (e.key === "Enter" || e.key === " " || e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        e.preventDefault();
+        openDropdown(d);
+        if (d.isOpen && e.key === "ArrowUp") setHl(d, d.items.length - 1);
+      }
+    });
+    document.addEventListener("click", (e) => {
+      if (!d.isOpen) return;
+      // 列表项点击后会被重建（target 脱离 DOM），用 composedPath 判断点击是否源自本控件
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+      if (!path.includes(d.dd) && !d.dd.contains(e.target)) closeDropdown(d);
+    });
+    window.addEventListener("resize", () => { if (d.isOpen) positionPop(d); });
+    window.addEventListener("scroll", () => { if (d.isOpen) positionPop(d); }, true);
+  }
+
+  function openDropdown(d) {
+    DROPDOWNS.forEach((o) => { if (o !== d && o.isOpen) closeDropdown(o); });
+    d.query = "";
+    d.searchInput.value = "";
+    d.search.hidden = [...d.sel.options].length <= 20;
+    d.isOpen = true;
+    d.btn.setAttribute("aria-expanded", "true");
+    d.pop.hidden = false;
+    if (d.multi) fillSelected(d);
+    fillList(d);
+    positionPop(d);
+  }
+
+  function closeDropdown(d) {
+    if (!d.isOpen) return;
+    d.isOpen = false;
+    d.hl = -1;
+    d.btn.setAttribute("aria-expanded", "false");
+    d.pop.hidden = true;
+  }
+
+  function positionPop(d) {
+    const st = d.pop.style;
+    if (window.innerWidth <= 720) {
+      st.left = st.top = st.right = st.bottom = st.width = "";
+      return;
+    }
+    const r = d.btn.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const w = Math.max(r.width, 300);
+    let left = Math.max(8, Math.min(r.left, vw - w - 8));
+    st.width = w + "px";
+    st.left = left + "px";
+    st.right = "auto";
+    st.top = (r.bottom + 6) + "px";
+    st.bottom = "auto";
+    const ph = d.pop.offsetHeight;
+    if (r.bottom + 6 + ph > window.innerHeight - 8 && r.top - 6 - ph > 8) {
+      st.top = "auto";
+      st.bottom = (window.innerHeight - r.top + 6) + "px";
+    }
+  }
+
+  function fillSelected(d) {
+    if (!d.selected) return;
+    const apps = state.apps || [];
+    d.selected.innerHTML = apps.map((a) =>
+      `<span class="dd-chip" data-v="${esc(a)}" title="${esc(a)}">${esc(a.length > 18 ? a.slice(0, 18) + "…" : a)}<button type="button" class="dd-chip-x" aria-label="移除 ${esc(a)}">×</button></span>`
+    ).join("") + (apps.length ? '<button type="button" class="dd-clear" data-act="clear">清除已选</button>' : "");
+    d.selected.hidden = !apps.length;
+  }
+
+  function fillList(d) {
+    const opts = [...d.sel.options];
+    let items;
+    d.matched = 0;
+    if (d.multi) {
+      if (d.query) {
+        const hits = matchApplicants(d.query);
+        const byName = new Map(opts.map((o) => [o.value, o]));
+        items = hits.map((h) => byName.get(h.name)).filter(Boolean);
+        d.matched = items.length;
+      } else {
+        items = opts.filter((o) => o.value !== "");
+      }
+    } else {
+      items = d.query
+        ? opts.filter((o) => o.value === "" || o.text.toLowerCase().includes(d.query.toLowerCase()))
+        : opts;
+    }
+    const total = items.length;
+    const shown = items.slice(0, 200);
+    d.items = shown;
+    const scrollTop = d.list.scrollTop;
+    d.list.innerHTML = shown.map((o) => {
+      const p = optParts(o.text);
+      const on = d.multi ? (state.apps || []).includes(o.value) : o.value === d.sel.value;
+      return `<button type="button" class="dd-item" role="option" aria-selected="${on}" data-v="${esc(o.value)}">`
+        + (d.multi ? `<span class="dd-check">${on ? "✓" : ""}</span>` : "")
+        + `<span class="dd-opt">${esc(p.label)}</span>`
+        + (p.count ? `<span class="dd-count">${esc(p.count)}</span>` : "")
+        + "</button>";
+    }).join("");
+    d.list.scrollTop = scrollTop;
+    fillFoot(d, shown.length, total);
+    const selIdx = shown.findIndex((o) => (d.multi ? (state.apps || []).includes(o.value) : o.value === d.sel.value));
+    setHl(d, selIdx >= 0 ? selIdx : 0, true);
+  }
+
+  function fillFoot(d, shown, total) {
+    const parts = [];
+    if (total > shown) parts.push(`<span class="dd-hint">共 ${total} 项，仅显示前 ${shown} 项，请继续输入</span>`);
+    if (d.multi && d.query && d.matched > 1) {
+      parts.push(`<button type="button" class="dd-act" data-act="all">全部加入（${Math.min(d.matched, 200)} 位）</button>`);
+    }
+    d.foot.innerHTML = parts.join("");
+    d.foot.hidden = !parts.length;
+  }
+
+  function setHl(d, i, noScroll) {
+    const nodes = [...d.list.querySelectorAll(".dd-item")];
+    if (!nodes.length) { d.hl = -1; return; }
+    d.hl = ((i % nodes.length) + nodes.length) % nodes.length;
+    nodes.forEach((el, k) => el.classList.toggle("hl", k === d.hl));
+    if (!noScroll) nodes[d.hl].scrollIntoView({ block: "nearest" });
+  }
+  function stepHl(d, dir) {
+    if (!d.items.length) return;
+    setHl(d, d.hl < 0 ? 0 : d.hl + dir);
+  }
+  function activateHl(d) {
+    const it = d.items[d.hl];
+    if (!it) return;
+    if (d.multi) toggleApp(it.value);
+    else pickSingle(d, it.value);
+  }
+  function pickSingle(d, value) {
+    d.sel.value = value;
+    closeDropdown(d);
+    d.sel.dispatchEvent(new Event("change", { bubbles: true }));
+    syncDropdowns();
+  }
+  function toggleApp(name) {
+    const apps = state.apps || (state.apps = []);
+    const i = apps.indexOf(name);
+    if (i >= 0) apps.splice(i, 1); else apps.push(name);
+    applyApps();
+  }
+  function applyApps() {
+    state.page = 1;
+    const sel = $("#appFilter");
+    if (sel) sel.value = (state.apps && state.apps[0]) || "";
+    render();
+    syncDropdowns();
+  }
+
+  function appBtnLabel() {
+    const apps = state.apps || [];
+    if (!apps.length) return "全部申请人";
+    const first = apps[0].length > 10 ? apps[0].slice(0, 10) + "…" : apps[0];
+    return apps.length > 1 ? `申请人：${first} 等 ${apps.length} 位` : `申请人：${first}`;
+  }
+
+  function syncDropdowns() {
+    for (const d of DROPDOWNS) {
+      if (!d.label) continue;
+      let text;
+      if (d.multi) text = appBtnLabel();
+      else {
+        const o = [...d.sel.options].find((x) => x.value === d.sel.value)
+          || [...d.sel.options].find((x) => x.value === "");
+        text = o ? o.text : "";
+      }
+      if (d.label.textContent !== text) d.label.textContent = text;
+      d.btn.title = text;
+      if (d.isOpen) {
+        if (d.multi) fillSelected(d);
+        fillList(d);
+      }
+    }
   }
 
   function hasActiveFilters() {
     return Boolean(
-      state.q || state.dir || state.year || state.app ||
+      state.q || state.dir || state.year ||
       (Array.isArray(state.apps) && state.apps.length) ||
-      state.applike || state.ipc || state.legal || state.country ||
+      state.ipc || state.legal || state.country ||
       state.tier || state.rel || state.co ||
       state.familyMode === "dedup" || state.favOnly
     );
@@ -1169,8 +1526,7 @@
     state.dir = "";
     state.year = "";
     state.app = "";
-    if (state.apps) state.apps = [];
-    state.applike = "";
+    state.apps = [];
     state.ipc = "";
     state.legal = "";
     state.country = "";
@@ -1195,7 +1551,7 @@
     push("q", state.q.trim());
     push("y", state.year);
     push("d", state.dir);
-    push("a", state.app);
+    push("a", (state.apps || []).join("|"));
     push("i", state.ipc);
     push("l", state.legal);
     push("c", state.country);
@@ -1218,7 +1574,8 @@
     state.q = qs.get("q") || "";
     state.year = qs.get("y") || "";
     state.dir = qs.get("d") || "";
-    state.app = qs.get("a") || "";
+    state.app = "";
+    state.apps = (qs.get("a") || "").split("|").filter(Boolean);
     state.ipc = qs.get("i") || "";
     state.legal = qs.get("l") || "";
     state.country = qs.get("c") || "";
@@ -1460,7 +1817,12 @@
   });
   $("#dirFilter").addEventListener("change", (e) => { state.dir = e.target.value; state.page = 1; render(); });
   $("#yearFilter").addEventListener("change", (e) => { state.year = e.target.value; state.page = 1; render(); });
-  $("#appFilter").addEventListener("change", (e) => { state.app = e.target.value; state.page = 1; render(); });
+  $("#appFilter").addEventListener("change", (e) => {
+    state.apps = e.target.value ? [e.target.value] : [];
+    state.page = 1;
+    render();
+    syncDropdowns();
+  });
   $("#ipcFilter").addEventListener("change", (e) => { state.ipc = e.target.value; state.page = 1; render(); });
   $("#legalFilter").addEventListener("change", (e) => { state.legal = e.target.value; state.page = 1; render(); });
   $("#countryFilter").addEventListener("change", (e) => { state.country = e.target.value; state.page = 1; render(); });
@@ -1640,6 +2002,8 @@
   initKwUnderline();
   wireAutoScrollbar();
   initTopbarHeight();
+  initDropdowns();
+  syncDropdowns();
   loadFavs();
   load();
 })();
