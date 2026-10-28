@@ -25,7 +25,7 @@ const EXPECT = {
   isd: 294,        // ISD 非空记录数
   famTotal: 610,   // 去重后族总数
   famMulti: 31,    // 成员数 >1 的族数
-  year2026: 477,   // stats.byYear 最新年 2026 计数（回归锚点）
+  year2026: -1,    // stats.byYear 2026 计数（-1=不固定，改用「与数据自洽」校验）
   country: 641,    // COUNTRY 非空数（H1 1a 回补后）
   adc: 542,        // ADC 非空（数组非空）记录数
   pic: 610,        // PDF_IMAGE_COUNT 非空（数字）记录数
@@ -48,7 +48,7 @@ function usage() {
   --isd=N             期望 ISD 非空数（默认 ${EXPECT.isd}）
   --fam-total=N       期望族总数（默认 ${EXPECT.famTotal}）
   --fam-multi=N       期望 >1 成员的族数（默认 ${EXPECT.famMulti}）
-  --year2026=N        期望 2026 年公开计数（默认 ${EXPECT.year2026}；-1 跳过）
+  --year2026=N        期望 2026 年公开计数（默认 -1：不固定，仅校验自洽）
   --country=N         期望 COUNTRY 非空数（默认 ${EXPECT.country}）
   --adc=N             期望 ADC 非空数（默认 ${EXPECT.adc}）
   --pic=N             期望 PDF_IMAGE_COUNT 非空数（默认 ${EXPECT.pic}）
@@ -223,10 +223,26 @@ if (existsSync(statsAbs)) {
   assert(st.total === opt.records, `stats.total 应=${opt.records}，实际=${st.total}`);
   const yrSum = (st.byYear || []).reduce((s, x) => s + (x.count || 0), 0);
   assert(yrSum === st.total, `stats.byYear 求和=${yrSum} ≠ total=${st.total}`);
+  // 自洽校验：stats.byYear 各年计数必须等于 patents.json 中 PBD 年份计数
+  // （避免每次增量都要手改硬编码锚点）
+  const byYearData = {};
+  for (const r of patents) {
+    const y = String(r.PBD || "").slice(0, 4);
+    if (/^\d{4}$/.test(y)) byYearData[y] = (byYearData[y] || 0) + 1;
+  }
+  for (const x of (st.byYear || [])) {
+    const exp = byYearData[x.year] || 0;
+    assert(x.count === exp, `stats.byYear ${x.year} 应为 ${exp}（按 PBD 年份），实际 ${x.count}`);
+  }
   const lastY = st.byYear && st.byYear[st.byYear.length - 1];
+  const dataLast = Object.keys(byYearData).sort().pop();
+  assert(lastY && lastY.year === dataLast,
+    `stats.byYear 最新年应为 ${dataLast}，实际 ${lastY && lastY.year}`);
   if (opt.year2026 >= 0) {
-    assert(lastY && lastY.year === "2026" && lastY.count === opt.year2026,
-      `stats.byYear 最新年应为 2026/${opt.year2026}，实际 ${lastY && lastY.year}/${lastY && lastY.count}`);
+    assert(lastY.year === "2026" && lastY.count === opt.year2026,
+      `stats.byYear 2026 应为 ${opt.year2026}，实际 ${lastY.count}`);
+  } else {
+    info(`stats.byYear 最新年 ${lastY.year}=${lastY.count}（与 PBD 数据自洽）`);
   }
   const topSum = (st.topApplicants || []).reduce((s, x) => s + (x.count || 0), 0);
   info(`stats.topApplicants 求和=${topSum}（TOP25 申请人件数，非全量）`);
