@@ -1255,13 +1255,9 @@
     `;
     const claimsBlock = r.CLAIMS ? `
       <div class="field"><span class="label">📋 权利要求（重点）</span><div class="value claims-text">${esc(r.CLAIMS)}</div></div>` : "";
-    // H1 1a：ADC 技术领域标签；附图数；国家；ISD（H5，非空才显示）
+    // H1 1a：ADC 技术领域标签
     const adcBlock = Array.isArray(r.ADC) && r.ADC.length ? `
       <div class="field"><span class="label">技术领域（ADC）</span><div class="value">${r.ADC.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>` : "";
-    const picLine = (typeof r.PDF_IMAGE_COUNT === "number" && r.PDF_IMAGE_COUNT > 0)
-      ? ` · 附图 ${r.PDF_IMAGE_COUNT} 幅` : "";
-    const countrySeg = r.COUNTRY ? ` · 国家 ${esc(r.COUNTRY)}` : "";
-    const isdSeg = r.ISD ? ` · 授权公告日 ${esc(r.ISD)}` : "";
     // H6：IPC/CPC 分类标签可点（点击跳该主组列表）
     const ipcTags = (r.IPCR || []).map((x) => {
       const g = ipcMainGroup(x);
@@ -1275,7 +1271,16 @@
     $("#detailBody").innerHTML = `
       <div class="detail">
         <h2>${buildTitleHtml(r, terms)}</h2>
-        <div class="meta">${esc(r.PN)}${ptype ? ` · ${esc(ptype)}` : ""}${countrySeg} · 申请号 ${esc(r.APN || "—")} · 公开日 ${esc(r.PBD)} · 申请日 ${esc(r.APD || "—")}${r.PRD ? ` · 优先权日 ${esc(r.PRD)}` : ""}${isdSeg}${picLine}</div>
+        <div class="meta">${[
+          esc(r.PN) + (ptype ? ` · ${esc(ptype)}` : ""),
+          r.COUNTRY ? `国家 ${esc(r.COUNTRY)}` : "",
+          `申请号 ${esc(r.APN || "—")}`,
+          `公开日 ${esc(r.PBD)}`,
+          `申请日 ${esc(r.APD || "—")}`,
+          r.PRD ? `优先权日 ${esc(r.PRD)}` : "",
+          r.ISD ? `授权公告日 ${esc(r.ISD)}` : "",
+          (typeof r.PDF_IMAGE_COUNT === "number" && r.PDF_IMAGE_COUNT > 0) ? `附图 ${r.PDF_IMAGE_COUNT} 幅` : ""
+        ].filter(Boolean).map((s) => `<span class="mseg">${s}</span>`).join('<span class="msep">·</span>')}</div>
         <div class="field"><span class="label">申请人</span><div class="value">${hlPlain((r.ANCS || []).join("、") || "—", terms)}</div></div>
         <div class="field"><span class="label">发明人</span><div class="value">${esc((r.IN || []).join("、") || "—")}</div></div>
         <div class="field"><span class="label">技术方向</span><div class="value">${esc(r.Directions || r.Direction)}</div></div>
@@ -1345,10 +1350,10 @@
     flashBtn($("#btnCsv"), `已导出 ${list.length} 条`);
   }
   function flashBtn(btn, txt) {
-    const old = btn.textContent;
+    const old = btn.innerHTML;
     btn.textContent = txt;
     clearTimeout(btn._t);
-    btn._t = setTimeout(() => { btn.textContent = old; }, 1200);
+    btn._t = setTimeout(() => { btn.innerHTML = old; }, 1200);
   }
 
   // ---------- 主题 ----------
