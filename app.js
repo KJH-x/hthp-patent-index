@@ -620,6 +620,7 @@
     $("#resultCount").textContent = state.familyMode === "dedup"
       ? `${total} / ${PATENTS.length} 条（按族去重，共 ${FAMILY_INDEX.size} 族）`
       : `${total} / ${PATENTS.length} 条`;
+    $("#clearAll").classList.toggle("hidden", !hasActiveFilters());
 
     const coChip = $("#coChip");
     if (state.co) {
@@ -1132,9 +1133,10 @@
   function syncFilterControls() {
     $("#searchInput").value = state.q;
     const setSel = (id, val) => {
-      if (!val) return;
       const sel = $(id);
-      if (sel && [...sel.options].some((o) => o.value === val)) sel.value = val;
+      if (!sel) return;
+      if (!val) { sel.value = ""; return; }
+      if ([...sel.options].some((o) => o.value === val)) sel.value = val;
     };
     setSel("#dirFilter", state.dir);
     setSel("#yearFilter", state.year);
@@ -1146,6 +1148,44 @@
     setSel("#relFilter", state.rel);
     const ps = $("#pageSize");
     if (ps) ps.value = state.pageSize === "all" ? "all" : String(state.pageSize);
+    const fam = $("#famToggle");
+    if (fam) fam.checked = state.familyMode === "dedup";
+    const fav = $("#favToggle");
+    if (fav) fav.checked = !!state.favOnly;
+  }
+
+  function hasActiveFilters() {
+    return Boolean(
+      state.q || state.dir || state.year || state.app ||
+      (Array.isArray(state.apps) && state.apps.length) ||
+      state.applike || state.ipc || state.legal || state.country ||
+      state.tier || state.rel || state.co ||
+      state.familyMode === "dedup" || state.favOnly
+    );
+  }
+
+  function clearAllFilters() {
+    state.q = "";
+    state.dir = "";
+    state.year = "";
+    state.app = "";
+    if (state.apps) state.apps = [];
+    state.applike = "";
+    state.ipc = "";
+    state.legal = "";
+    state.country = "";
+    state.tier = "";
+    state.rel = "";
+    state.co = "";
+    state.page = 1;
+    state.familyMode = "all";
+    state.favOnly = false;
+    const fam = $("#famToggle");
+    if (fam) fam.checked = false;
+    const fav = $("#favToggle");
+    if (fav) fav.checked = false;
+    syncFilterControls();
+    render();
   }
 
   // hash 字段：q/y/d/a/i/l/c/s/o/ps/pg/v/p
@@ -1443,6 +1483,7 @@
     state.page = 1;
     render();
   });
+  $("#clearAll").addEventListener("click", clearAllFilters);
   $("#modalClose").addEventListener("click", closeDetail);
   $("#detailModal").addEventListener("click", (e) => {
     if (e.target === $("#detailModal")) { closeDetail(); return; }

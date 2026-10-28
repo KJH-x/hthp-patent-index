@@ -166,7 +166,13 @@ body {
 .view-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .charts, .chart-box { min-height: 0; }
 
-.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; flex-shrink: 0; }
+.toolbar { display: flex; flex-direction: column; gap: 8px; align-items: stretch; margin-bottom: 12px; flex-shrink: 0; }
+.tb-search { display: flex; }
+.ctl-shell {
+  position: relative; overflow: hidden; border-radius: var(--ctl-radius);
+  display: flex; flex: 1 1 auto; min-width: 0;
+}
+.tb-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 /* ---------- 表单控件统一皮肤（筛选 / 分页 / 地图） ---------- */
 .toolbar input, .toolbar select,
@@ -202,7 +208,7 @@ body {
 #countryFilter { max-width: 118px; }
 #appFilter { flex: 0 1 230px; max-width: 230px; }
 #searchInput {
-  flex: 1 1 260px; min-width: 220px; cursor: text;
+  width: 100%; flex: 1 1 auto; min-width: 0; cursor: text;
   padding-left: 35px;
   background-image: var(--ctl-search);
   background-repeat: no-repeat; background-position: 12px center;
@@ -396,6 +402,8 @@ u.kw-uline {
   .view-toggle .vt-label, .switch-btn .vt-label { display: none; }
   .view-toggle button, .switch-btn { padding: 8px 11px; }
   .card-hint { display: none; }
+  .tb-search { min-width: 0; }
+  #searchInput { min-width: 0; max-width: 100%; }
 }
 
 /* ========== H2 同族 badge / 族成员 ========== */
@@ -438,6 +446,11 @@ u.kw-uline {
   transition: border-color .15s, box-shadow .15s, background-color .15s;
 }
 .export-btn:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.export-btn.ghost { color: var(--muted); border-style: dashed; }
+.export-btn.ghost:hover {
+  color: #b91c1c; border-color: #fca5a5;
+  background: color-mix(in srgb, #f87171 10%, transparent);
+}
 
 /* ========== H4/H7 详情弹层头部工具条 ========== */
 .modal-head {

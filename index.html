@@ -41,24 +41,29 @@
   <!-- 列表视图 -->
   <section id="view-list" class="view active">
     <div class="toolbar">
-      <input id="searchInput" type="search" placeholder="搜索标题/摘要/申请人/专利号…（支持拼音，如 rebeng / gaowenrebeng）">
-      <select id="dirFilter"><option value="">全部方向</option></select>
-      <select id="yearFilter"><option value="">全部年份</option></select>
-      <select id="appFilter"><option value="">全部申请人</option></select>
-      <select id="ipcFilter"><option value="">全部IPC</option></select>
-      <select id="legalFilter"><option value="">全部法律状态</option></select>
-      <select id="countryFilter"><option value="">全部国家</option></select>
-<select id="tierFilter" title="质量分级：彩框≈1% / 金框≈10% / 紫框≈30% / 白框其余"><option value="">全部分级</option></select>
-<select id="relFilter" title="主题关联性（LLM 判定）：核心/相关/边缘/无关"><option value="">全部关联</option></select>
-      <label class="fam-toggle" title="同一专利族只显示主记录（授权优先）">
-        <input type="checkbox" id="famToggle"> 折叠同族
-      </label>
-      <label class="fam-toggle" title="只看已收藏的专利">
-        <input type="checkbox" id="favToggle"> 只看收藏
-      </label>
-      <span id="coChip" class="co-chip hidden" title="点击清除联合申请组合筛选"></span>
-      <span class="result-count" id="resultCount"></span>
-      <button id="btnCsv" type="button" class="export-btn" title="导出当前筛选结果为 CSV（Excel 可直接打开）">⬇ 导出 CSV</button>
+      <div class="tb-search"><div class="ctl-shell" id="searchShell">
+        <input id="searchInput" type="search" placeholder="搜索标题/摘要/申请人/专利号…（支持拼音，如 rebeng / gaowenrebeng）">
+      </div></div>
+      <div class="tb-filters">
+        <select id="dirFilter"><option value="">全部方向</option></select>
+        <select id="yearFilter"><option value="">全部年份</option></select>
+        <select id="appFilter"><option value="">全部申请人</option></select>
+        <select id="ipcFilter"><option value="">全部IPC</option></select>
+        <select id="legalFilter"><option value="">全部法律状态</option></select>
+        <select id="countryFilter"><option value="">全部国家</option></select>
+        <select id="tierFilter" title="质量分级：彩框≈1% / 金框≈10% / 紫框≈30% / 白框其余"><option value="">全部分级</option></select>
+        <select id="relFilter" title="主题关联性（LLM 判定）：核心/相关/边缘/无关"><option value="">全部关联</option></select>
+        <label class="fam-toggle" title="同一专利族只显示主记录（授权优先）">
+          <input type="checkbox" id="famToggle"> 折叠同族
+        </label>
+        <label class="fam-toggle" title="只看已收藏的专利">
+          <input type="checkbox" id="favToggle"> 只看收藏
+        </label>
+        <span id="coChip" class="co-chip hidden" title="点击清除联合申请组合筛选"></span>
+        <button id="clearAll" type="button" class="export-btn ghost hidden" title="清除所有筛选条件" aria-label="清除所有筛选条件">✕ 清除筛选</button>
+        <span class="result-count" id="resultCount"></span>
+        <button id="btnCsv" type="button" class="export-btn" title="导出当前筛选结果为 CSV（Excel 可直接打开）">⬇ 导出 CSV</button>
+      </div>
     </div>
     <div class="list-area">
       <div class="table-wrap" id="tableWrap">
