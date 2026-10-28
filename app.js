@@ -1869,7 +1869,7 @@
     }
     const r = shell.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
-    const w = Math.max(r.width, 360);
+    const w = Math.min(Math.max(r.width, 360), 640);
     const left = Math.max(8, Math.min(r.left, vw - w - 8));
     st.width = w + "px";
     st.left = left + "px";
@@ -1958,10 +1958,15 @@
       const inside = ae === $("#searchInput") || (paletteEl && paletteEl.contains(ae));
       if (!inside) return;
       if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closePalette();
+        e.stopPropagation();
+        return;
+      }
       if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setPaletteHl(paletteHl + 1); }
       else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setPaletteHl(paletteHl - 1); }
       else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); paletteActivate(paletteHl); }
-      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePalette(); }
       else if (e.key === "Tab") closePalette(false);
     }, true);
   }
@@ -2205,8 +2210,22 @@
   // events
   let searchTimer;
   let searchStartValue = null;
-  $("#searchInput").addEventListener("focus", (e) => { searchStartValue = e.target.value; });
+  let SEARCH_BASE = location.pathname + location.search;
+  let searchEntryPushed = false;
+  function resetSearchEntry() {
+    searchEntryPushed = false;
+    SEARCH_BASE = location.pathname + location.search;
+  }
+  $("#searchInput").addEventListener("focus", (e) => {
+    searchStartValue = e.target.value;
+    SEARCH_BASE = location.pathname + location.search;
+    searchEntryPushed = false;
+  });
   $("#searchInput").addEventListener("input", (e) => {
+    if (!searchEntryPushed) {
+      history.pushState(null, "", SEARCH_BASE || (location.pathname + location.search));
+      searchEntryPushed = true;
+    }
     if (paletteOpen) closePalette(false);
     state.q = e.target.value; state.page = 1;
     clearTimeout(searchTimer);
@@ -2216,37 +2235,42 @@
     if (e.key !== "Enter") return;
     if (e.isComposing || e.keyCode === 229) return;
     e.preventDefault();
-    clearTimeout(searchTimer);
-    state.q = e.target.value; state.page = 1;
-    const info = lastTokenInfo(state.q);
-    const r = resolveToken(info.token);
-    if (!r) {
-      PUSH_NEXT = true;
-      render();
-      return;
+    try {
+      clearTimeout(searchTimer);
+      state.q = e.target.value; state.page = 1;
+      const info = lastTokenInfo(state.q);
+      const r = resolveToken(info.token);
+      if (!r) {
+        PUSH_NEXT = true;
+        render();
+        return;
+      }
+      if (r.apps.length === 1 || r.auto) {
+        state.apps = [...new Set([...(state.apps || []), ...r.apps.map((o) => o.name)])]
+          .filter(Boolean).slice(0, 200);
+        state.q = removeLastToken(state.q, info.token);
+        state.page = 1;
+        syncFilterControls();
+        PUSH_NEXT = true;
+        render();
+        flashCtl($("#searchShell"));
+        flashCtl(appDropRoot());
+        return;
+      }
+      openPalette(info.token, r);
+    } finally {
+      resetSearchEntry();
     }
-    if (r.apps.length === 1 || r.auto) {
-      state.apps = [...new Set([...(state.apps || []), ...r.apps.map((o) => o.name)])]
-        .filter(Boolean).slice(0, 200);
-      state.q = removeLastToken(state.q, info.token);
-      state.page = 1;
-      syncFilterControls();
-      PUSH_NEXT = true;
-      render();
-      flashCtl($("#searchShell"));
-      flashCtl(appDropRoot());
-      return;
-    }
-    openPalette(info.token, r);
   });
   $("#searchInput").addEventListener("blur", (e) => {
     const changed = searchStartValue !== null && e.target.value !== searchStartValue;
     searchStartValue = e.target.value;
-    if (!changed) return;
+    if (!changed) { resetSearchEntry(); return; }
     clearTimeout(searchTimer);
     state.q = e.target.value; state.page = 1;
     PUSH_NEXT = true;
     render();
+    resetSearchEntry();
   });
   $("#dirFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.dir = e.target.value; state.page = 1; render(); });
   $("#yearFilter").addEventListener("change", (e) => { PUSH_NEXT = true; state.year = e.target.value; state.page = 1; render(); });

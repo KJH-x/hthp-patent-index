@@ -18,7 +18,7 @@
   --tag-bg: #f3f4f6;
   --tag-ink: #374151;
   --track: #f3f4f6;
-  --row-alt: #fbfcfd;
+  --row-alt: #f6f8fa;
   --code-bg: #fafbfc;
   --hl-bg: #fde68a;
   --hl-ink: #92400e;
@@ -55,7 +55,7 @@
   --tag-bg: #334155;
   --tag-ink: #cbd5e1;
   --track: #334155;
-  --row-alt: rgba(255, 255, 255, .035);
+  --row-alt: rgba(255, 255, 255, .05);
   --code-bg: #101b2e;
   --hl-bg: #78350f;
   --hl-ink: #fde68a;
@@ -87,7 +87,7 @@
     --tag-bg: #334155;
     --tag-ink: #cbd5e1;
     --track: #334155;
-    --row-alt: rgba(255, 255, 255, .035);
+    --row-alt: rgba(255, 255, 255, .05);
     --code-bg: #101b2e;
     --hl-bg: #78350f;
     --hl-ink: #fde68a;
@@ -265,7 +265,7 @@ td .pdf-link:hover { text-decoration: underline; }
 .col-title { width: auto; }
 .col-ancs { width: 22%; }
 .col-pbd { width: 96px; white-space: nowrap; }
-.col-dir { width: 120px; }
+.col-dir { width: 184px; }
 .col-pdf { width: 104px; white-space: nowrap; }
 
 .pager { display: flex; align-items: center; gap: 14px; padding: 10px 14px; justify-content: flex-end; font-size: 13px; color: var(--muted); flex-shrink: 0; }
@@ -335,17 +335,6 @@ u.kw-uline {
 }
 
 /* 自定义页内滚动条：窄条、圆角、默认隐藏，悬停/滚动时显示 */
-.table-wrap, .card-wrap, .modal-content, .claims-text,
-.view-scroll, .scrollbox, .chart.heat {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-.table-wrap:hover, .card-wrap:hover, .modal-content:hover, .claims-text:hover,
-.view-scroll:hover, .scrollbox:hover, .chart.heat:hover,
-.table-wrap.is-scroll, .card-wrap.is-scroll, .modal-content.is-scroll, .claims-text.is-scroll,
-.view-scroll.is-scroll, .scrollbox.is-scroll, .chart.heat.is-scroll {
-  scrollbar-color: var(--scrollbar) transparent;
-}
 .table-wrap::-webkit-scrollbar, .card-wrap::-webkit-scrollbar,
 .modal-content::-webkit-scrollbar, .claims-text::-webkit-scrollbar,
 .view-scroll::-webkit-scrollbar, .scrollbox::-webkit-scrollbar, .chart.heat::-webkit-scrollbar {
@@ -375,7 +364,23 @@ u.kw-uline {
   background: var(--scrollbar-hover);
 }
 
-@media (max-width: 720px) { .col-ancs { width: 30%; } .col-dir { width: 96px; } }
+@media (max-width: 720px) {
+  #patentTable { min-width: 640px; }
+  .col-pn { width: 112px; }
+  .col-ancs { width: 26%; }
+  .col-pbd { width: 92px; }
+  .col-dir { width: 150px; }
+  .col-pdf { width: 96px; }
+}
+/* 窄屏：隐藏次要列（申请人/方向），把宽度让给标题 */
+@media (max-width: 560px) {
+  #patentTable { min-width: 430px; }
+  #patentTable th:nth-child(3), #patentTable td:nth-child(3),
+  #patentTable th:nth-child(5), #patentTable td:nth-child(5) { display: none; }
+  .col-pn { width: 104px; }
+  .col-pbd { width: 92px; }
+  .col-pdf { width: 86px; }
+}
 
 /* stats */
 .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 24px; }
@@ -383,7 +388,7 @@ u.kw-uline {
 .stat-card .num { font-size: 30px; font-weight: 700; color: var(--accent); }
 .stat-card .lbl { color: var(--muted); font-size: 13px; }
 .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.chart-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+.chart-box { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; min-width: 0; }
 .chart-box.full { grid-column: 1 / -1; }
 .chart-box h3 { font-size: 15px; margin-bottom: 12px; }
 .chart { position: relative; }
@@ -397,8 +402,8 @@ u.kw-uline {
   :root { --topbar-h: 188px; }
   .topbar { flex-direction: column; gap: 10px; align-items: flex-start; }
   .head-right { width: 100%; align-items: flex-start; }
-  .charts { grid-template-columns: 1fr; }
-  .chart .bar-label { width: 90px; }
+  .charts { grid-template-columns: minmax(0, 1fr); }
+  .chart .bar-label { width: 96px; max-width: 42%; }
   .card-wrap { grid-template-columns: 1fr; padding: 10px; }
   .view-toggle .vt-label, .switch-btn .vt-label { display: none; }
   .view-toggle button, .switch-btn { padding: 8px 11px; }
@@ -417,6 +422,7 @@ u.kw-uline {
 .fam-toggle {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 13px; color: var(--label); cursor: pointer; white-space: nowrap;
+  min-height: var(--ctl-h);
 }
 .fam-toggle input { accent-color: var(--accent); }
 .detail .fam-id { color: var(--muted); font-size: 12px; margin-right: 6px; }
@@ -660,6 +666,7 @@ u.kw-uline {
 #appDirHeat .app-hcell:hover { outline: 2px solid var(--accent); }
 #jointApps .bar-label { width: 320px; max-width: 42vw; }
 #appDirHeat .hm-dir { width: 170px; }
+@media (max-width: 720px) { #appDirHeat .hm-dir { width: 120px; } }
 
 /* ========== P3 自定义下拉（listbox，零依赖） ========== */
 .dd { position: relative; display: inline-flex; min-width: 0; }
@@ -861,9 +868,9 @@ u.kw-uline {
 }
 .sp-item:hover, .sp-item.hl { background: var(--accent-soft); }
 .sp-item[aria-selected="true"] { color: var(--accent); font-weight: 600; }
-.sp-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-count {
-  margin-left: auto; color: var(--muted); font-weight: 400;
+  margin-left: auto; flex: 0 0 auto; color: var(--muted); font-weight: 400;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .sp-act {
