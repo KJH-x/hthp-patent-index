@@ -1661,6 +1661,325 @@
     }
   }
 
+  // ---------- P5 查询分词 / 申请人解析 / 分类建议面板 ----------
+  const TOKEN_SEPS = /[\s\u3000,，、;；|｜]+/;
+  const TOKEN_SEP_CHAR = /[\s\u3000,，、;；|｜]/;
+
+  function isTokenSep(ch) {
+    return !!ch && TOKEN_SEP_CHAR.test(ch);
+  }
+
+  // 最后一个非空词：忽略尾部（及头部）分隔符；前后第一个分隔符之间的连续串
+  function lastTokenInfo(q) {
+    const s = String(q == null ? "" : q);
+    let end = s.length;
+    while (end > 0 && isTokenSep(s[end - 1])) end--;
+    let start = end;
+    while (start > 0 && !isTokenSep(s[start - 1])) start--;
+    return { token: s.slice(start, end), start, end };
+  }
+
+  // 删除该词 + 一个相邻分隔符；连接处重复分隔符合并为一个空格后 trim
+  function removeLastToken(q, token) {
+    const s = String(q == null ? "" : q);
+    const info = lastTokenInfo(s);
+    const tok = token == null ? info.token : String(token);
+    if (!tok) return s.trim();
+    const start = info.token === tok ? info.start : s.lastIndexOf(tok);
+    if (start < 0) return s;
+    let left = s.slice(0, start);
+    let right = s.slice(start + tok.length);
+    if (isTokenSep(right[0])) right = right.slice(1);
+    else if (isTokenSep(left[left.length - 1])) left = left.slice(0, -1);
+    let out = left + right;
+    if (left && right && isTokenSep(left[left.length - 1]) && isTokenSep(right[0])) {
+      out = left.replace(TOKEN_SEPS, "") + " " + right.replace(TOKEN_SEPS, "");
+    }
+    return out.replace(/^[\s\u3000]+|[\s\u3000]+$/g, "");
+  }
+
+  // 严格申请人解析（复用 P3 matchApplicants）：命中件数 + 非申请人命中数 + 自动加入判定
+  function resolveToken(token) {
+    const t = String(token == null ? "" : token).trim();
+    if (!t || t.includes(":")) return null;
+    const apps = matchApplicants(t);
+    const names = new Set(apps.map((o) => o.name));
+    const needle = t.toLowerCase();
+    let appPatents = 0;
+    let nonAppHits = 0;
+    for (const r of PATENTS) {
+      if ((r.ANCS || []).some((a) => names.has(a))) { appPatents++; continue; }
+      const hay = `${r.TITLE || ""} ${r.ABSTRACT || ""} ${r.Direction || ""} ${r.Directions || ""}`.toLowerCase();
+      if (hay.includes(needle)) nonAppHits++;
+    }
+    const auto = apps.length >= 1 && apps.length <= 10 &&
+      nonAppHits <= Math.max(3, 0.25 * appPatents);
+    return { apps, appPatents, nonAppHits, auto };
+  }
+
+  function countKeywordHits(token) {
+    const needle = String(token == null ? "" : token).toLowerCase();
+    if (!needle) return 0;
+    let n = 0;
+    for (const r of PATENTS) {
+      if (`${r.TITLE || ""} ${r.ABSTRACT || ""}`.toLowerCase().includes(needle)) n++;
+    }
+    return n;
+  }
+
+  const PALETTE_FACETS = [
+    ["dir", "方向", "#dirFilter"],
+    ["year", "年份", "#yearFilter"],
+    ["ipc", "IPC", "#ipcFilter"],
+    ["legal", "法律状态", "#legalFilter"],
+    ["country", "国家", "#countryFilter"],
+    ["tier", "分级", "#tierFilter"],
+    ["rel", "关联", "#relFilter"]
+  ];
+  const FACET_SELECTOR = {};
+  PALETTE_FACETS.forEach(([f, , sel]) => { FACET_SELECTOR[f] = sel; });
+
+  let paletteEl = null;
+  let paletteOpen = false;
+  let paletteToken = "";
+  let paletteItems = [];
+  let paletteAll = [];
+  let paletteHl = -1;
+
+  function ensurePalette() {
+    if (paletteEl) return paletteEl;
+    paletteEl = document.createElement("div");
+    paletteEl.id = "searchPalette";
+    paletteEl.setAttribute("role", "listbox");
+    paletteEl.setAttribute("aria-label", "搜索建议");
+    paletteEl.hidden = true;
+    document.body.appendChild(paletteEl);
+    paletteEl.addEventListener("click", onPaletteClick);
+    document.addEventListener("click", (e) => {
+      if (!paletteOpen) return;
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+      if (path.includes(paletteEl) || paletteEl.contains(e.target)) return;
+      const shell = $("#searchShell");
+      if (shell && (path.includes(shell) || shell.contains(e.target))) return;
+      closePalette(false);
+    });
+    window.addEventListener("resize", () => { if (paletteOpen) positionPalette(); });
+    window.addEventListener("scroll", (e) => {
+      if (!paletteOpen) return;
+      if (paletteEl && (e.target === paletteEl || paletteEl.contains(e.target))) return;
+      positionPalette();
+    }, true);
+    return paletteEl;
+  }
+
+  function appDropRoot() {
+    const sel = $("#appFilter");
+    return sel ? sel.closest(".dd") : null;
+  }
+
+  // 面板分组：只保留 count > 0 的分组（分组头也不渲染空组）
+  function paletteSections(token, r) {
+    const needle = String(token || "").toLowerCase();
+    const secs = [];
+    if (r.apps.length) {
+      const idx = appIndexOf();
+      secs.push({
+        kind: "app",
+        title: "申请人",
+        count: r.apps.length,
+        items: r.apps.slice(0, 8).map((o) => {
+          const rec = idx.get(o.name);
+          return { kind: "app", name: o.name, count: rec ? rec.count : o.count };
+        }),
+        all: r.apps.map((o) => o.name)
+      });
+    }
+    PALETTE_FACETS.forEach(([field, title, sel]) => {
+      const el = $(sel);
+      if (!el) return;
+      const items = [...el.options]
+        .filter((o) => o.value !== "")
+        .map((o) => {
+          const p = optParts(o.text);
+          return { kind: "facet", field, value: o.value, label: p.label, count: p.count };
+        })
+        .filter((it) => it.label.toLowerCase().includes(needle));
+      if (items.length) secs.push({ kind: "facet", title, count: items.length, items });
+    });
+    const kwN = countKeywordHits(token);
+    if (kwN > 0) {
+      secs.push({ kind: "kw", title: "关键词", count: kwN, items: [{ kind: "kw", label: token, count: kwN }] });
+    }
+    return secs;
+  }
+
+  function renderPalette(token, r) {
+    const secs = paletteSections(token, r);
+    paletteItems = [];
+    const appSec = secs.find((s) => s.kind === "app");
+    paletteAll = appSec ? appSec.all : [];
+    const html = secs.map((sec) => {
+      const head = `<div class="sp-head">${esc(sec.title)}<span class="sp-n">(${sec.count})</span></div>`;
+      const items = sec.items.map((it) => {
+        const i = paletteItems.push(it) - 1;
+        const text = it.kind === "app" ? it.name : it.label;
+        return `<button type="button" class="sp-item" role="option" aria-selected="false" data-i="${i}" data-kind="${it.kind}" title="${esc(text)}">`
+          + `<span class="sp-label">${esc(text)}</span><span class="sp-count">${esc(it.count)}</span></button>`;
+      }).join("");
+      const foot = sec.kind === "app" && sec.count > 1
+        ? `<button type="button" class="sp-act" data-kind="all">全部加入（${Math.min(sec.count, 200)} 位）</button>`
+        : "";
+      return `<div class="sp-sec">${head}${items}${foot}</div>`;
+    }).join("");
+    paletteEl.innerHTML = html;
+    paletteHl = -1;
+    setPaletteHl(0, true);
+    return secs.length > 0;
+  }
+
+  function openPalette(token, r) {
+    ensurePalette();
+    paletteToken = token;
+    if (!renderPalette(token, r)) { closePalette(false); return; }
+    paletteOpen = true;
+    paletteEl.hidden = false;
+    positionPalette();
+  }
+
+  function closePalette(refocus) {
+    const was = paletteOpen;
+    paletteOpen = false;
+    paletteHl = -1;
+    paletteToken = "";
+    if (paletteEl) paletteEl.hidden = true;
+    if (was && refocus !== false) {
+      const inp = $("#searchInput");
+      if (inp) inp.focus();
+    }
+  }
+
+  function positionPalette() {
+    if (!paletteEl || !paletteOpen) return;
+    const shell = $("#searchShell");
+    if (!shell) return;
+    const st = paletteEl.style;
+    if (window.innerWidth <= 720) {
+      st.left = st.top = st.right = st.bottom = st.width = "";
+      return;
+    }
+    const r = shell.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const w = Math.max(r.width, 360);
+    const left = Math.max(8, Math.min(r.left, vw - w - 8));
+    st.width = w + "px";
+    st.left = left + "px";
+    st.right = "auto";
+    st.top = (r.bottom + 6) + "px";
+    st.bottom = "auto";
+    const h = paletteEl.offsetHeight;
+    if (r.bottom + 6 + h > window.innerHeight - 8) {
+      st.top = Math.max(8, r.top - 6 - h) + "px";
+    }
+  }
+
+  function setPaletteHl(i, noScroll) {
+    const nodes = paletteEl ? [...paletteEl.querySelectorAll(".sp-item")] : [];
+    if (!nodes.length) { paletteHl = -1; return; }
+    paletteHl = ((i % nodes.length) + nodes.length) % nodes.length;
+    nodes.forEach((n, k) => {
+      const on = k === paletteHl;
+      n.classList.toggle("hl", on);
+      n.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (!noScroll) nodes[paletteHl].scrollIntoView({ block: "nearest" });
+  }
+
+  function paletteAddApplicant(name) {
+    state.apps = [...new Set([...(state.apps || []), name])].filter(Boolean).slice(0, 200);
+    state.q = removeLastToken(state.q, paletteToken);
+    state.page = 1;
+    syncFilterControls();
+    PUSH_NEXT = true;
+    render();
+    flashCtl($("#searchShell"));
+    flashCtl(appDropRoot());
+  }
+
+  function paletteAddAll(names) {
+    state.apps = [...new Set(names)].filter(Boolean).slice(0, 200);
+    state.q = removeLastToken(state.q, paletteToken);
+    state.page = 1;
+    syncFilterControls();
+    PUSH_NEXT = true;
+    render();
+    closePalette();
+    flashCtl($("#searchShell"));
+    flashCtl(appDropRoot());
+  }
+
+  function palettePickFacet(field, value) {
+    state[field] = value;
+    state.q = removeLastToken(state.q, paletteToken);
+    state.page = 1;
+    syncFilterControls();
+    PUSH_NEXT = true;
+    render();
+    const sel = $(FACET_SELECTOR[field]);
+    const dd = sel ? sel.closest(".dd") : null;
+    closePalette();
+    flashCtl(dd);
+  }
+
+  function paletteActivate(i) {
+    const it = paletteItems[i];
+    if (!it) return;
+    if (it.kind === "app") paletteAddApplicant(it.name);
+    else if (it.kind === "facet") palettePickFacet(it.field, it.value);
+    else closePalette();
+  }
+
+  function onPaletteClick(e) {
+    const act = e.target.closest(".sp-act");
+    if (act) {
+      if (paletteAll.length > 1) paletteAddAll(paletteAll);
+      e.stopPropagation();
+      return;
+    }
+    const item = e.target.closest(".sp-item[data-i]");
+    if (!item) return;
+    paletteActivate(+item.dataset.i);
+    e.stopPropagation();
+  }
+
+  function wirePaletteKeys() {
+    document.addEventListener("keydown", (e) => {
+      if (!paletteOpen) return;
+      const ae = document.activeElement;
+      const inside = ae === $("#searchInput") || (paletteEl && paletteEl.contains(ae));
+      if (!inside) return;
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setPaletteHl(paletteHl + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setPaletteHl(paletteHl - 1); }
+      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); paletteActivate(paletteHl); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePalette(); }
+      else if (e.key === "Tab") closePalette(false);
+    }, true);
+  }
+
+  // 0.3s 控件扫光反馈（prefers-reduced-motion 时由 CSS 换成透明度脉冲）
+  function flashCtl(el) {
+    if (!el) return;
+    el.classList.remove("flash");
+    void el.offsetWidth;
+    el.classList.add("flash");
+    const done = () => {
+      el.classList.remove("flash");
+      el.removeEventListener("animationend", done);
+    };
+    el.addEventListener("animationend", done);
+    setTimeout(done, 400);
+  }
+
   // ---------- H7 详情 prev/next ----------
   function updateDetailNav() {
     const prev = $("#detailPrev"), next = $("#detailNext");
@@ -1888,17 +2207,37 @@
   let searchStartValue = null;
   $("#searchInput").addEventListener("focus", (e) => { searchStartValue = e.target.value; });
   $("#searchInput").addEventListener("input", (e) => {
+    if (paletteOpen) closePalette(false);
     state.q = e.target.value; state.page = 1;
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => render(), 160);   // H10：输入防抖（replace，不写历史）
   });
   $("#searchInput").addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
+    if (e.isComposing || e.keyCode === 229) return;
     e.preventDefault();
     clearTimeout(searchTimer);
     state.q = e.target.value; state.page = 1;
-    PUSH_NEXT = true;
-    render();
+    const info = lastTokenInfo(state.q);
+    const r = resolveToken(info.token);
+    if (!r) {
+      PUSH_NEXT = true;
+      render();
+      return;
+    }
+    if (r.apps.length === 1 || r.auto) {
+      state.apps = [...new Set([...(state.apps || []), ...r.apps.map((o) => o.name)])]
+        .filter(Boolean).slice(0, 200);
+      state.q = removeLastToken(state.q, info.token);
+      state.page = 1;
+      syncFilterControls();
+      PUSH_NEXT = true;
+      render();
+      flashCtl($("#searchShell"));
+      flashCtl(appDropRoot());
+      return;
+    }
+    openPalette(info.token, r);
   });
   $("#searchInput").addEventListener("blur", (e) => {
     const changed = searchStartValue !== null && e.target.value !== searchStartValue;
@@ -2094,6 +2433,7 @@
   wireAutoScrollbar();
   initTopbarHeight();
   initDropdowns();
+  wirePaletteKeys();
   syncDropdowns();
   loadFavs();
   load();
