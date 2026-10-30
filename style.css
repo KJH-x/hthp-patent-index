@@ -10,6 +10,7 @@
   --muted: #6b7280;
   --accent: #2563eb;
   --accent-soft: #eff6ff;
+  --link: #1a0dab;
   --border: #e5e7eb;
   --th-bg: #fafbfc;
   --th-ink: #374151;
@@ -47,6 +48,7 @@
   --muted: #94a3b8;
   --accent: #60a5fa;
   --accent-soft: rgba(96, 165, 250, .14);
+  --link: #8ab4f8;
   --border: #334155;
   --th-bg: #1b2a44;
   --th-ink: #cbd5e1;
@@ -79,6 +81,7 @@
     --muted: #94a3b8;
     --accent: #60a5fa;
     --accent-soft: rgba(96, 165, 250, .14);
+    --link: #8ab4f8;
     --border: #334155;
     --th-bg: #1b2a44;
     --th-ink: #cbd5e1;
@@ -258,8 +261,28 @@ tbody tr:hover { background: var(--accent-soft); cursor: pointer; }
 #patentTable tbody tr:hover { background: var(--accent-soft); }
 td .pn { font-family: Consolas, monospace; font-weight: 600; color: var(--accent); white-space: nowrap; }
 td .dir-badge { display: inline-block; background: var(--accent-soft); color: var(--accent); border-radius: 20px; padding: 2px 10px; font-size: 12px; white-space: nowrap; }
-td .pdf-link { color: var(--accent); text-decoration: none; font-size: 13px; white-space: nowrap; }
-td .pdf-link:hover { text-decoration: underline; }
+/* 原文外链：内网（正文色）/ 谷歌（超链接蓝） */
+.link-internal, .link-google { text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.link-internal { color: var(--ink); }
+.link-google { color: var(--link); }
+.link-internal:hover, .link-google:hover { text-decoration: underline; }
+.ico { width: 15px; height: 15px; display: block; flex: 0 0 auto; }
+/* 原文列：两个方形按钮横排（图标在上、文字在下） */
+.pdf-links { display: flex; gap: 6px; align-items: stretch; }
+.pdf-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; width: 32px; padding: 3px 0; border-radius: 8px;
+  font-size: 10px; line-height: 1.1; text-decoration: none; white-space: nowrap;
+  transition: filter .15s, background-color .15s;
+}
+.pdf-btn .ico { width: 16px; height: 16px; }
+.pdf-btn.link-internal { color: var(--ink); background: var(--tag-bg); }
+.pdf-btn.link-google { color: var(--link); background: color-mix(in srgb, var(--link) 10%, var(--card)); }
+.pdf-btn:hover { text-decoration: none; filter: brightness(.96); }
+.foot-links { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; }
+.foot-links .ico { width: 15px; height: 15px; }
+.card-foot .link-internal { color: var(--ink); }
+.card-foot .link-google { color: var(--link); }
 /* 列宽：窄列固定不折行，宽列自适应 */
 .col-pn { width: 136px; }
 .col-title { width: auto; }
@@ -309,8 +332,6 @@ u.kw-uline {
 .card-ancs { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-abs { font-size: 12.5px; color: var(--abs); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 6px; border-top: 1px dashed var(--border); }
-.card-foot .pdf-link { color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 600; }
-.card-foot .pdf-link:hover { text-decoration: underline; }
 .card-hint { color: var(--muted); font-size: 12px; }
 
 /* modal */
@@ -326,7 +347,31 @@ u.kw-uline {
 .detail .field .label { font-weight: 600; color: var(--label); font-size: 13px; margin-bottom: 4px; }
 .detail .field .value { font-size: 14px; }
 .detail .tag { display: inline-block; background: var(--tag-bg); border-radius: 6px; padding: 2px 8px; font-size: 12px; margin: 2px 3px 2px 0; color: var(--tag-ink); }
-.detail .pdf-open { display: inline-block; margin-top: 8px; background: var(--accent); color: #fff; padding: 8px 18px; border-radius: 8px; text-decoration: none; }
+/* 详情头部外链 */
+.modal-ext {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 13px; padding: 4px 10px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--tag-bg);
+  white-space: nowrap; text-decoration: none;
+  transition: background-color .15s, border-color .15s;
+}
+.modal-ext .ico { width: 16px; height: 16px; }
+.modal-ext.ext-internal { color: var(--ink); }
+.modal-ext.ext-google {
+  color: var(--link);
+  background: color-mix(in srgb, var(--link) 9%, var(--card));
+  border-color: color-mix(in srgb, var(--link) 38%, var(--border));
+}
+.modal-ext:hover {
+  background: color-mix(in srgb, var(--link) 16%, var(--card));
+  border-color: color-mix(in srgb, var(--link) 55%, var(--border));
+  text-decoration: none;
+}
+.modal-ext.ext-internal:hover {
+  background: color-mix(in srgb, var(--ink) 8%, var(--card));
+  border-color: color-mix(in srgb, var(--ink) 35%, var(--border));
+}
+.lbl-short { display: none; }
 .detail-hr { border: none; border-top: 1px solid var(--border); margin: 18px 0 12px; }
 .detail-section { font-size: 15px; color: var(--accent); margin-bottom: 12px; }
 .detail .claims-text {
@@ -364,23 +409,6 @@ u.kw-uline {
   background: var(--scrollbar-hover);
 }
 
-@media (max-width: 720px) {
-  #patentTable { min-width: 640px; }
-  .col-pn { width: 112px; }
-  .col-ancs { width: 26%; }
-  .col-pbd { width: 92px; }
-  .col-dir { width: 150px; }
-  .col-pdf { width: 96px; }
-}
-/* 窄屏：隐藏次要列（申请人/方向），把宽度让给标题 */
-@media (max-width: 560px) {
-  #patentTable { min-width: 430px; }
-  #patentTable th:nth-child(3), #patentTable td:nth-child(3),
-  #patentTable th:nth-child(5), #patentTable td:nth-child(5) { display: none; }
-  .col-pn { width: 104px; }
-  .col-pbd { width: 92px; }
-  .col-pdf { width: 86px; }
-}
 
 /* stats */
 .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 24px; }
@@ -405,6 +433,8 @@ u.kw-uline {
   .charts { grid-template-columns: minmax(0, 1fr); }
   .chart .bar-label { width: 96px; max-width: 42%; }
   .card-wrap { grid-template-columns: 1fr; padding: 10px; }
+  /* 窄屏禁用列表（表格）模式，只保留卡片视图 */
+  .view-toggle { display: none; }
   .view-toggle .vt-label, .switch-btn .vt-label { display: none; }
   .view-toggle button, .switch-btn { padding: 8px 11px; }
   .card-hint { display: none; }
@@ -516,6 +546,9 @@ u.kw-uline {
 @media (max-width: 520px) {
   .nav-label { display: none; }
   .modal-nav, .modal-copy { padding: 4px 10px; }
+  .lbl-full { display: none; }
+  .lbl-short { display: inline; }
+  .modal-ext { padding: 4px 6px; gap: 4px; }
 }
 
 /* 分段加载进度条（优先列表/卡片渲染） */

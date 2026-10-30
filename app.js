@@ -44,6 +44,16 @@
   function pdfHref(r) {
     return PDF_BASE + r.PN + ".pdf";
   }
+  // Google Patents：低覆盖地区（港/越/智/马）退化为站内搜索
+  const GOOGLE_LOW_COVERAGE = /^(HK|VN|CL|MY)/;
+  function googlePatentHref(r) {
+    const pn = String(r.PN || "").trim();
+    if (GOOGLE_LOW_COVERAGE.test(pn)) {
+      return "https://patents.google.com/?q=" + encodeURIComponent(pn);
+    }
+    const lang = /^(CN|TW)/.test(pn) ? "zh" : "en";
+    return `https://patents.google.com/patent/${encodeURIComponent(pn)}/${lang}`;
+  }
 
   let PATENTS = [];
   let STATS = null;
@@ -562,7 +572,9 @@
   }
 
   function effectiveView() {
-    if (state.viewMode === "auto") return window.innerWidth <= 720 ? "card" : "table";
+    // 窄屏只允许卡片视图（列表/表格模式在手机上布局不可用）
+    if (window.innerWidth <= 720) return "card";
+    if (state.viewMode === "auto") return "table";
     return state.viewMode;
   }
 
@@ -608,8 +620,11 @@
         <div class="card-ancs">${ancs}</div>
         ${abs ? `<div class="card-abs">${abs}</div>` : ""}
         <div class="card-foot">
-          <a class="pdf-link" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 内网下载</a>
-          <span class="card-hint">点卡片打开详情 →</span>
+          <span class="foot-links">
+            <a class="link-internal" href="${esc(pdfHref(r))}" target="_blank" rel="noopener" title="打开官方 PDF（内网访问）"><img class="ico" src="/assets/icons/pdf.svg" alt="" aria-hidden="true">内网</a>
+            <a class="link-google" href="${esc(googlePatentHref(r))}" target="_blank" rel="noopener noreferrer" title="在 Google Patents 打开（需外网）"><img class="ico" src="/assets/icons/google.svg" alt="" aria-hidden="true">谷歌</a>
+          </span>
+          <span class="card-hint">详情 →</span>
         </div>
       </div>`;
   }
@@ -662,7 +677,10 @@
           <td class="col-ancs">${hlPlain((r.ANCS || []).join("、") || "—", terms)}</td>
           <td class="col-pbd">${esc(r.PBD)}</td>
           <td class="col-dir"><span class="dir-badge">${esc(r.Direction)}</span></td>
-          <td class="col-pdf"><a class="pdf-link" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 内网下载</a></td>
+          <td class="col-pdf"><div class="pdf-links">
+          <a class="pdf-btn link-internal" href="${esc(pdfHref(r))}" target="_blank" rel="noopener" title="打开官方 PDF（内网访问）"><img class="ico" src="/assets/icons/pdf.svg" alt="" aria-hidden="true">内网</a>
+          <a class="pdf-btn link-google" href="${esc(googlePatentHref(r))}" target="_blank" rel="noopener noreferrer" title="在 Google Patents 打开（需外网）"><img class="ico" src="/assets/icons/google.svg" alt="" aria-hidden="true">谷歌</a>
+        </div></td>
         </tr>`;
       }).join("") || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">无匹配结果</td></tr>';
     }
@@ -2079,10 +2097,14 @@
         ${aiBlock ? `<hr class="detail-hr"><h3 class="detail-section">📊 专利分析</h3>` : ""}
         ${aiBlock}
         ${claimsBlock}
-        <a class="pdf-open" href="${esc(pdfHref(r))}" target="_blank" rel="noopener">📄 打开官方PDF（内网）</a>
       </div>`;
     detailPn = pn;
     PENDING_PN = "";
+    // 头部外链：内网 PDF + Google Patents
+    const aPdf = document.getElementById("detailPdf");
+    const aGoogle = document.getElementById("detailGoogle");
+    if (aPdf) aPdf.href = pdfHref(r);
+    if (aGoogle) aGoogle.href = googlePatentHref(r);
     $("#detailModal").classList.remove("hidden");
     const mcontent = $("#detailModal .modal-content");
     if (mcontent) mcontent.focus();
@@ -2110,7 +2132,7 @@
 
   // ---------- H4 CSV 导出 ----------
   const CSV_COLS = [
-    ["PN", "公开号"], ["PType", "类型"], ["TITLE", "标题"],
+    ["PN", "公开号"], ["__GOOGLE__", "谷歌专利"], ["PType", "类型"], ["TITLE", "标题"],
     ["ANCS", "申请人"], ["IN", "发明人"],
     ["APD", "申请日"], ["PBD", "公开日"], ["ISD", "授权公告日"],
     ["Direction", "方向"], ["IPCR", "IPC主组"],
@@ -2126,6 +2148,7 @@
     const list = filtered();
     const header = CSV_COLS.map(([, zh]) => csvCell(zh)).join(",");
     const rows = list.map((r) => CSV_COLS.map(([k]) => {
+      if (k === "__GOOGLE__") return csvCell(googlePatentHref(r));
       if (k === "ANCS") return csvCell((r.ANCS || []).join("、"));
       if (k === "IN") return csvCell((r.IN || []).join("、"));
       if (k === "IPCR") return csvCell((r.IPCR || []).map(ipcMainGroup).join(";"));
@@ -2372,7 +2395,7 @@
   let resizeTimer;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (state.viewMode === "auto") render(); }, 150);
+    resizeTimer = setTimeout(() => { render(); }, 150);
   });
   $$(".tab").forEach((t) => {
     t.addEventListener("click", (e) => {

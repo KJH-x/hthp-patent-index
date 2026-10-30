@@ -75,7 +75,7 @@
               <th data-key="ANCS" class="sortable col-ancs">申请人</th>
               <th data-key="PBD" class="sortable col-pbd">公开日</th>
               <th data-key="Direction" class="sortable col-dir">方向</th>
-              <th class="col-pdf">PDF</th>
+              <th class="col-pdf">原文</th>
             </tr>
           </thead>
           <tbody id="tableBody"></tbody>
@@ -98,6 +98,14 @@
         <button class="modal-nav" id="detailPrev" type="button" title="上一篇（←）">← <span class="nav-label">上一篇</span></button>
         <button class="modal-nav" id="detailNext" type="button" title="下一篇（→）"><span class="nav-label">下一篇</span> →</button>
         <button class="modal-copy" id="modalCopy" type="button" title="复制本件专利的深链（含当前筛选条件）">🔗 <span class="nav-label">复制链接</span></button>
+        <a class="modal-ext ext-internal" id="detailPdf" href="#" target="_blank" rel="noopener" title="打开官方 PDF（内网访问）">
+          <img class="ico" src="/assets/icons/pdf.svg" alt="" aria-hidden="true">
+          <span class="lbl-full">内网访问</span><span class="lbl-short">内网</span>
+        </a>
+        <a class="modal-ext ext-google" id="detailGoogle" href="#" target="_blank" rel="noopener noreferrer" title="在 Google Patents 打开（需外网）">
+          <img class="ico" src="/assets/icons/google.svg" alt="" aria-hidden="true">
+          <span class="lbl-full">谷歌专利</span><span class="lbl-short">谷歌</span>
+        </a>
         <button class="modal-close" id="modalClose">✕</button>
       </div>
       <div id="detailBody"></div>
